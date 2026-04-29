@@ -1,0 +1,28 @@
+Now I want to setup the roles and permissions on the Locations module
+
+It should work like this
+
+If that is accessed by the organization login then that can accessible not permissions required
+
+But same APIs if access by the employee login then must check
+
+Employee > Role > Permission is allowed for that action or not
+
+Also create one open API for the use case like I have access of employee module and in that there filter of locations then I must be see that list but I should not manage the locations module [If you have the another way to handle this let me know, Suggest best approach]
+
+For the locations I have added below permissons in table
+
+permission_code: 11 [Read location apply on read action like list, details]
+permission_code: 9 [Apply on add/create location]
+permission_code: 10 [Apply on update location]
+permission_code: 12 [Apply on delete location]
+
+
+
+----------------
+----------------
+----------------
+----------------
+----------------
+----------------
+
