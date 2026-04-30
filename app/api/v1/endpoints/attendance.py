@@ -27,7 +27,7 @@ from app.schemas.attendance import (
     AttendanceCurrentStatusResponse, AttendanceRecordListResponse,
     AttendanceRecordResponse, ManualAttendanceCreate, AttendanceRecordUpdate,
     EmployeeAttendanceResponse, AttendanceSummaryResponse,
-    AttendanceDashboardResponse, AttendanceLogListResponse,
+    AttendanceDashboardResponse, AttendanceLogListResponse, PaginationData,
     AttendanceLogProcessRequest, AttendanceLogProcessResponse,
     AttendanceSyncRequest, AttendanceSyncResponse,
     AttendanceRegularizationListResponse, AttendanceRegularizationResponse,
@@ -1445,11 +1445,17 @@ def get_attendance_dashboard(
     _: bool = Depends(deps.check_permission("33")),
     date_query: date = Query(default=date.today(), alias="date"),
     department_uuid: Optional[uuid.UUID] = Query(None, description="Filter by Department UUID"),
-    location_uuid: Optional[uuid.UUID] = Query(None, description="Filter by Location UUID")
+    location_uuid: Optional[uuid.UUID] = Query(None, description="Filter by Location UUID"),
+    search: Optional[str] = Query(None, description="Search by employee name or code"),
+    sort_by: Optional[str] = Query(None, description="Sort by employee, status, first_check_in, last_check_out"),
+    order: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Sort order"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, description="Items per page")
 ):
     """
     Real-time attendance dashboard showing status of all employees for a specific date.
     Includes current status (On Break, Checked In) if the date is today.
+    Supports search, sorting, and pagination.
     """
     # 1. Base Employee Query
     emp_query = db.query(Employee).filter(
@@ -1462,6 +1468,17 @@ def get_attendance_dashboard(
         emp_query = emp_query.join(Department, Employee.department_id == Department.id).filter(Department.uuid == department_uuid)
     if location_uuid:
         emp_query = emp_query.join(Location, Employee.location_id == Location.id).filter(Location.uuid == location_uuid)
+    
+    if search:
+        search_term = f"%{search}%"
+        emp_query = emp_query.filter(
+            or_(
+                Employee.first_name.ilike(search_term),
+                Employee.last_name.ilike(search_term),
+                Employee.employee_code.ilike(search_term),
+                (Employee.first_name + " " + Employee.last_name).ilike(search_term)
+            )
+        )
         
     employees = emp_query.all()
     if not employees:
@@ -1469,8 +1486,9 @@ def get_attendance_dashboard(
             success=True,
             message="No employees found",
             date=date_query,
-            summary={"total_employees": 0, "present": 0, "absent": 0, "late": 0, "on_break": 0},
-            data=[]
+            summary={"total_employees": 0, "present": 0, "absent": 0, "late": 0, "on_break": 0, "on_leave": 0},
+            data=[],
+            pagination=PaginationData(total_records=0, current_page=page, total_pages=0, page_size=limit)
         )
         
     employee_ids = [e.id for e in employees]
@@ -1510,7 +1528,7 @@ def get_attendance_dashboard(
         ).all()
         latest_punches = {p.employee_id: p for p in punches}
 
-    # 5. Build Response
+    # 5. Build Response Data (Full list before sort/pagination)
     dashboard_data = []
     summary = {
         "total_employees": len(employees),
@@ -1582,12 +1600,40 @@ def get_attendance_dashboard(
         if is_on_break:
             summary["on_break"] += 1
 
+    # 6. Sorting logic
+    if sort_by:
+        reverse = (order == "desc")
+        if sort_by == "employee":
+            dashboard_data.sort(key=lambda x: (x["employee_name"] or "").lower(), reverse=reverse)
+        elif sort_by == "status":
+            dashboard_data.sort(key=lambda x: (x["status"].value if x["status"] else ""), reverse=reverse)
+        elif sort_by == "first_check_in":
+            dashboard_data.sort(key=lambda x: (x["first_check_in"] is None, x["first_check_in"]), reverse=reverse)
+        elif sort_by == "last_check_out":
+            dashboard_data.sort(key=lambda x: (x["last_check_out"] is None, x["last_check_out"]), reverse=reverse)
+
+    # 7. Pagination logic
+    total_records = len(dashboard_data)
+    total_pages = (total_records + limit - 1) // limit if limit > 0 else 0
+    
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_data = dashboard_data[start_idx:end_idx]
+    
+    pagination = PaginationData(
+        total_records=total_records,
+        current_page=page,
+        total_pages=total_pages,
+        page_size=limit
+    )
+
     return AttendanceDashboardResponse(
         success=True,
         message="Attendance dashboard retrieved successfully",
         date=date_query,
         summary=summary,
-        data=dashboard_data
+        data=paginated_data,
+        pagination=pagination
     )
 
 @router.get("/logs", response_model=AttendanceLogListResponse)

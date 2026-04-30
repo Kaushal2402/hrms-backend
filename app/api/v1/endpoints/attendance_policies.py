@@ -55,19 +55,21 @@ def create_attendance_policy(
         ).update({"is_default": False})
 
     # 2. Resolve UUIDs to IDs
-    policy_data = policy_in.model_dump(exclude={'department_uuids', 'location_uuids'})
+    policy_data = policy_in.model_dump(exclude={'department_uuids', 'location_uuids', 'departments', 'locations'})
     
-    if policy_in.department_uuids:
+    department_uuids = getattr(policy_in, 'department_uuids', None)
+    if department_uuids:
         dept_ids = db.query(Department.id).filter(
-            Department.uuid.in_(policy_in.department_uuids),
+            Department.uuid.in_(department_uuids),
             Department.organization_id == current_org.id,
             Department.is_deleted == False
         ).all()
         policy_data['department_ids'] = [r[0] for r in dept_ids]
 
-    if policy_in.location_uuids:
+    location_uuids = getattr(policy_in, 'location_uuids', None)
+    if location_uuids:
         loc_ids = db.query(Location.id).filter(
-            Location.uuid.in_(policy_in.location_uuids),
+            Location.uuid.in_(location_uuids),
             Location.organization_id == current_org.id,
             Location.is_deleted == False
         ).all()
@@ -255,19 +257,21 @@ def update_attendance_policy(
         ).update({"is_default": False})
 
     # 3. Apply updates
-    update_data = policy_in.model_dump(exclude_unset=True, exclude={'department_uuids', 'location_uuids'})
+    update_data = policy_in.model_dump(exclude_unset=True, exclude={'department_uuids', 'location_uuids', 'departments', 'locations'})
     
-    if policy_in.department_uuids is not None:
+    department_uuids = getattr(policy_in, 'department_uuids', None)
+    if department_uuids is not None:
         dept_ids = db.query(Department.id).filter(
-            Department.uuid.in_(policy_in.department_uuids),
+            Department.uuid.in_(department_uuids),
             Department.organization_id == current_org.id,
             Department.is_deleted == False
         ).all()
         update_data['department_ids'] = [r[0] for r in dept_ids]
 
-    if policy_in.location_uuids is not None:
+    location_uuids = getattr(policy_in, 'location_uuids', None)
+    if location_uuids is not None:
         loc_ids = db.query(Location.id).filter(
-            Location.uuid.in_(policy_in.location_uuids),
+            Location.uuid.in_(location_uuids),
             Location.organization_id == current_org.id,
             Location.is_deleted == False
         ).all()

@@ -418,6 +418,7 @@ class AttendanceDashboardResponse(BaseModel):
     date: date
     summary: dict
     data: List[DashboardEmployeeStatus]
+    pagination: Optional[PaginationData] = None
 
 class AttendanceLogProcessRequest(BaseModel):
     log_uuids: Optional[List[UUID4]] = None
@@ -702,7 +703,8 @@ class AttendancePolicyBase(BaseModel):
     is_default: bool = False
 
 class AttendancePolicyCreate(AttendancePolicyBase):
-    pass
+    department_uuids: Optional[List[UUID4]] = None
+    location_uuids: Optional[List[UUID4]] = None
 
 class AttendancePolicyUpdate(BaseModel):
     policy_name: Optional[str] = None
