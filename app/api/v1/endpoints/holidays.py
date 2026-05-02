@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, Query, status, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
-from sqlalchemy import extract, or_
+from sqlalchemy import extract, or_, func, JSON
 from app.models.employee import Employee, Location, Department
 
 from app.api import deps
@@ -34,7 +34,8 @@ def list_holidays(
     db: Session = Depends(deps.get_db),
     current_org: Organization = Depends(deps.get_current_org),
     year: Optional[int] = Query(None, description="Filter by year (YYYY)"),
-    location_id: Optional[int] = Query(None, description="Filter by location ID"),
+    location_id: Optional[str] = Query(None, description="Filter by location ID or UUID"),
+    department_id: Optional[str] = Query(None, description="Filter by department ID or UUID"),
     holiday_type: Optional[str] = Query(None, description="Filter by holiday type (public, restricted, etc.)"),
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
@@ -57,15 +58,59 @@ def list_holidays(
         query = query.filter(Holiday.holiday_year == year)
     
     if location_id:
-        # Since location_ids is a JSON field in the model
-        # We need to check if location_id is in the JSON array
-        from sqlalchemy import func
-        query = query.filter(
-            or_(
-                Holiday.is_location_specific == False,
-                func.json_contains(Holiday.location_ids, func.cast(location_id, func.JSON))
+        # Resolve UUID if provided
+        actual_location_id = None
+        try:
+            if "-" in str(location_id):
+                loc = db.query(Location).filter(
+                    Location.uuid == location_id,
+                    Location.organization_id == current_org.id
+                ).first()
+                if loc:
+                    actual_location_id = loc.id
+                else:
+                    actual_location_id = -1 # Not found
+            else:
+                actual_location_id = int(location_id)
+        except (ValueError, TypeError):
+            pass
+
+        if actual_location_id is not None:
+            # Since location_ids is a JSON field in the model
+            from sqlalchemy import func
+            query = query.filter(
+                or_(
+                    Holiday.is_location_specific == False,
+                    func.json_contains(Holiday.location_ids, str(actual_location_id))
+                )
             )
-        )
+
+    if department_id:
+        # Resolve UUID if provided
+        actual_dept_id = None
+        try:
+            if "-" in str(department_id):
+                dept = db.query(Department).filter(
+                    Department.uuid == department_id,
+                    Department.organization_id == current_org.id
+                ).first()
+                if dept:
+                    actual_dept_id = dept.id
+                else:
+                    actual_dept_id = -1 # Not found
+            else:
+                actual_dept_id = int(department_id)
+        except (ValueError, TypeError):
+            pass
+
+        if actual_dept_id is not None:
+            # Since department_ids is a JSON field in the model
+            query = query.filter(
+                or_(
+                    Holiday.is_department_specific == False,
+                    func.json_contains(Holiday.department_ids, str(actual_dept_id))
+                )
+            )
 
     if holiday_type:
         query = query.filter(Holiday.holiday_type == holiday_type)

@@ -104,7 +104,7 @@ def list_leave_encashments(
         }
     )
 
-@router.post("/", response_model=LeaveEncashmentResponse, dependencies=[Depends(deps.check_permission("52"))])
+@router.post("/", response_model=LeaveEncashmentResponse)
 def create_leave_encashment(
     encashment_in: LeaveEncashmentCreate,
     db: Session = Depends(deps.get_db),
@@ -150,10 +150,11 @@ def create_leave_encashment(
     
     # Ownership Check: Employees can only create encashments for themselves
     if isinstance(current_user, Employee) and current_user.uuid != encashment_in.employee_uuid:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. You can only create encashment requests for yourself."
-        )
+        if not deps.has_permission(db, current_user, "52"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. You can only create encashment requests for yourself."
+            )
     
     # 3. Get Employee's Latest Salary (for calculation)
     latest_history = db.query(EmployeeHistory).filter(

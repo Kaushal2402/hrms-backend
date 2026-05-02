@@ -110,3 +110,9 @@ class GeofencePermissions:
     CREATE = "68"
     UPDATE = "69"
     DELETE = "70"
+
+class IndustryPermissions:
+    READ = "71"
+    CREATE = "72"
+    UPDATE = "73"
+    DELETE = "74"

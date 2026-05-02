@@ -15,9 +15,11 @@ from app.schemas.organization import (
     OrganizationVerifyOTP, 
     Organization as OrganizationSchema,
     OrganizationResendOTP,
-    OrganizationUpdate
+    OrganizationUpdate,
+    OnboardingProgressResponse
 )
 from app.utils.email import send_otp_email, send_welcome_email
+from app.utils.onboarding import get_onboarding_progress
 from app.core import security
 
 router = APIRouter()
@@ -135,7 +137,8 @@ def resend_otp(
 def verify_otp(
     *,
     db: Session = Depends(deps.get_db),
-    verification_in: OrganizationVerifyOTP
+    verification_in: OrganizationVerifyOTP,
+    background_tasks: BackgroundTasks
 ):
     """
     Verify the OTP sent to email.
@@ -171,12 +174,9 @@ def verify_otp(
     # Send Welcome Email
     # We send the RAW password so user can login first time.
     # Logic in utils/email.py should handle sending this safely/securely (e.g. over TLS).
-    # NOTE: Background task (if we had it in args) or sync here. 
-    # Since background_tasks param is missing in verify_otp, we'll run sync or need to add parameter.
-    # Let's add background_tasks to function signature first to avoid blocking.
-    send_welcome_email(org.email, org.name, raw_password)
+    background_tasks.add_task(send_welcome_email, org.email, org.name, raw_password)
     
-    return {"message": "Verification successful. Account is active."}
+    return {"message": "Verification completed we have sent you login details on you mail"}
 
 from fastapi import File, UploadFile, Form
 from app.models.organization import OrganizationSize
@@ -263,3 +263,18 @@ def update_organization(
     db.commit()
     db.refresh(org)
     return org
+
+@router.get("/onboarding-progress", response_model=OnboardingProgressResponse)
+def get_organization_onboarding_progress(
+    db: Session = Depends(deps.get_db),
+    current_org: Organization = Depends(deps.get_current_org)
+):
+    """
+    Get the onboarding progress for the currently authenticated organization.
+    """
+    progress = get_onboarding_progress(db, current_org.id)
+    return {
+        "success": True,
+        "message": "Onboarding progress retrieved successfully",
+        "data": progress
+    }

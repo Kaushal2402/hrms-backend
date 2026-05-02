@@ -180,10 +180,11 @@ def apply_for_leave(
 
     # RBAC Check: Employee can only apply for themselves
     if isinstance(current_user, Employee) and current_user.id != employee.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. You can only apply for leave for yourself."
-        )
+        if not deps.has_permission(db, current_user, "56"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. You can only apply for leave for yourself."
+            )
         
     # 2. Resolve Leave Type
     leave_type = db.query(LeaveType).filter(

@@ -42,6 +42,7 @@ class OrganizationRegister(BaseModel):
     email: EmailStr
     phone: str
     organization_size: OrganizationSize = OrganizationSize.SIZE_1_10
+    industry_id: Optional[int] = None
 
 # Properties to receive on update
 class OrganizationUpdate(BaseModel):
@@ -109,3 +110,23 @@ class OrganizationVerifyOTP(BaseModel):
 
 class OrganizationResendOTP(BaseModel):
     email: EmailStr
+
+class OnboardingStep(BaseModel):
+    is_profile_completed: bool
+    is_departments_setup: bool
+    is_job_titles_setup: bool
+    is_locations_setup: bool
+    is_attendance_policy_setup: bool
+    is_shift_types_setup: bool
+    is_holiday_setup: bool
+    is_leave_policy_setup: bool
+    is_leave_types_setup: bool
+    is_roles_permissions_setup: bool
+    total_steps: int
+    completed_steps: int
+    overall_percentage: int
+
+class OnboardingProgressResponse(BaseModel):
+    success: bool
+    message: str
+    data: OnboardingStep

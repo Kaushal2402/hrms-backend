@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, Enum, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, Enum, Integer, ForeignKey
 from sqlalchemy.types import TypeDecorator, CHAR
 import uuid
 import enum
@@ -60,6 +60,20 @@ class OrganizationSize(str, enum.Enum):
     SIZE_201_500 = "201-500"
     SIZE_500_PLUS = "500+"
 
+class Industry(Base):
+    __tablename__ = "industries"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(GUID(), default=uuid.uuid4, unique=True, nullable=False, index=True)
+    
+    name = Column(String(100), unique=True, nullable=False, index=True)
+    description = Column(String(500), nullable=True)
+    icon = Column(String(50), nullable=True)
+    is_active = Column(Boolean, default=True, index=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Organization(Base):
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(GUID(), default=uuid.uuid4, unique=True, nullable=False, index=True)
@@ -72,6 +86,7 @@ class Organization(Base):
     logo = Column(String(255), nullable=True)
     
     industry = Column(String(100), nullable=True) # Check if we want strictly dropdown values or just string
+    industry_id = Column(Integer, ForeignKey('industries.id'), nullable=True)
     organization_size = Column(Enum(OrganizationSize), default=OrganizationSize.SIZE_1_10, nullable=False)
     founded_year = Column(Integer, nullable=True)
     

@@ -10,11 +10,14 @@ from app.core.config import settings
 from app.models.organization import Organization, OrganizationStatus
 from app.models.employee import Employee, EmploymentStatus
 from app.models.auth import TokenBlacklist
+from app.models.rbac import UserRole, RolePermission, Permission
 from jose import jwt
 from app.schemas.auth import Token, Login, ForgotPassword, ResetPassword, SetPassword
 from app.schemas.organization import Organization as OrganizationSchema
 from app.schemas.employee import EmployeeSchema
+from app.schemas.rbac import Permission as PermissionSchema
 from app.utils.email import send_reset_password_email
+from app.utils.onboarding import get_onboarding_progress
 
 router = APIRouter()
 
@@ -89,8 +92,20 @@ def login(
     
     if user_type == "organization":
         response_data["organization"] = OrganizationSchema.model_validate(user_obj)
+        response_data["onboarding_progress"] = get_onboarding_progress(db, user_obj.id)
     else:
         response_data["employee"] = EmployeeSchema.model_validate(user_obj)
+        # Fetch permissions
+        permissions = db.query(Permission).join(
+            RolePermission, Permission.id == RolePermission.permission_id
+        ).join(
+            UserRole, RolePermission.role_id == UserRole.role_id
+        ).filter(
+            UserRole.user_id == user_obj.id,
+            UserRole.is_active == True,
+            Permission.is_active == True
+        ).all()
+        response_data["permissions"] = [PermissionSchema.model_validate(p) for p in permissions]
         
     return response_data
 
