@@ -70,7 +70,8 @@ from app.schemas.leave import (
 from app.schemas.holiday import EmployeeOptionalHolidayListResponse, HolidayListResponse
 from app.schemas.attendance import (
     ShiftRosterListResponse, OvertimeSummaryResponse,
-    ApprovalDelegationListResponse, ApprovalDelegationSchema
+    ApprovalDelegationListResponse, ApprovalDelegationSchema,
+    ShiftRosterCalendarResponse, CalendarHoliday, CalendarLeave
 )
 from app.models.attendance import (
     ShiftRoster, ShiftMaster, OvertimeRequest, OvertimeStatus, CompensationType,
@@ -131,7 +132,7 @@ def get_own_profile(
         data=current_user
     )
 
-@router.get("/me/shift-roster", response_model=ShiftRosterListResponse)
+@router.get("/me/shift-roster", response_model=ShiftRosterCalendarResponse)
 def get_my_shift_roster(
     from_date: Optional[date] = Query(None, description="Filter from roster date"),
     to_date: Optional[date] = Query(None, description="Filter to roster date"),
@@ -141,7 +142,7 @@ def get_my_shift_roster(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
     """
-    Get the currently logged-in employee's published shift roster.
+    Get the currently logged-in employee's published shift roster, holidays, and leaves.
     """
     if isinstance(current_user, Organization):
         raise HTTPException(
@@ -186,11 +187,49 @@ def get_my_shift_roster(
             "total_pages": 1,
             "page_size": total_records if total_records > 0 else 0
         }
+    # 1. Fetch Holidays
+    cal_from = from_date or date.today().replace(day=1)
+    cal_to = to_date or (date.today() + timedelta(days=31))
+    
+    holidays = db.query(Holiday).filter(
+        Holiday.organization_id == current_user.organization_id,
+        Holiday.holiday_date >= cal_from,
+        Holiday.holiday_date <= cal_to,
+        Holiday.is_active == True
+    ).all()
+    
+    calendar_holidays = [
+        CalendarHoliday(
+            holiday_name=h.holiday_name,
+            holiday_date=h.holiday_date,
+            holiday_type=h.holiday_type.value if hasattr(h.holiday_type, 'value') else str(h.holiday_type)
+        ) for h in holidays
+    ]
+    
+    # 2. Fetch Leaves
+    leaves = db.query(LeaveApplication).filter(
+        LeaveApplication.employee_id == current_user.id,
+        LeaveApplication.status.in_([LeaveStatus.APPROVED, LeaveStatus.REJECTED, LeaveStatus.CANCELLED]),
+        LeaveApplication.from_date <= cal_to,
+        LeaveApplication.to_date >= cal_from
+    ).options(joinedload(LeaveApplication.leave_type)).all()
+    
+    calendar_leaves = [
+        CalendarLeave(
+            leave_type_name=l.leave_type.leave_name,
+            from_date=l.from_date,
+            to_date=l.to_date,
+            status=l.status.value if hasattr(l.status, 'value') else str(l.status),
+            total_days=float(l.total_days)
+        ) for l in leaves
+    ]
 
-    return ShiftRosterListResponse(
+    return ShiftRosterCalendarResponse(
         success=True,
-        message="My shift roster retrieved successfully",
-        data=rosters,
+        message="My calendar data retrieved successfully",
+        rosters=rosters,
+        holidays=calendar_holidays,
+        leaves=calendar_leaves,
         pagination=pagination_data
     )
 

@@ -1544,6 +1544,8 @@ class AttendanceRecord(Base):
     late_by_minutes = Column(Integer, default=0)
     is_early_departure = Column(Boolean, default=False)
     early_departure_minutes = Column(Integer, default=0)
+    is_late_departure = Column(Boolean, default=False)
+    late_departure_minutes = Column(Integer, default=0)
     
     # Location Information
     check_in_location = Column(String(255), nullable=True)

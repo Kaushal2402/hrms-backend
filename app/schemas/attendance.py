@@ -1,4 +1,4 @@
-from pydantic import BaseModel, UUID4, Field
+from pydantic import BaseModel, UUID4, Field, model_validator
 from typing import Optional, List, Any
 from datetime import datetime, time, date
 import enum
@@ -59,8 +59,25 @@ class ShiftBase(BaseModel):
     is_active: bool = True
     is_default: bool = False
 
+
 class ShiftCreate(ShiftBase):
-    pass
+    @model_validator(mode='after')
+    def validate_shift_logic(self) -> 'ShiftCreate':
+        if self.late_arrival_grace_minutes < 0:
+            raise ValueError("Late arrival grace minutes must be non-negative")
+        if self.early_departure_grace_minutes < 0:
+            raise ValueError("Early departure grace minutes must be non-negative")
+        if self.overtime_threshold_minutes < 0:
+            raise ValueError("Overtime threshold minutes must be non-negative")
+        if self.work_hours <= 0 or self.work_hours > 24:
+            raise ValueError("Work hours must be between 0 and 24")
+        if self.half_day_hours is not None and self.half_day_hours >= self.work_hours:
+            raise ValueError("Half day hours must be less than full day work hours")
+        if self.has_break:
+            if self.break_start_time and self.break_end_time:
+                if self.break_start_time >= self.break_end_time:
+                    raise ValueError("Break start time must be before break end time")
+        return self
 
 class ShiftUpdate(BaseModel):
     shift_code: Optional[str] = None
@@ -89,6 +106,21 @@ class ShiftUpdate(BaseModel):
     color_code: Optional[str] = None
     is_active: Optional[bool] = None
     is_default: Optional[bool] = None
+
+    @model_validator(mode='after')
+    def validate_update_logic(self) -> 'ShiftUpdate':
+        if self.late_arrival_grace_minutes is not None and self.late_arrival_grace_minutes < 0:
+            raise ValueError("Late arrival grace minutes must be non-negative")
+        if self.early_departure_grace_minutes is not None and self.early_departure_grace_minutes < 0:
+            raise ValueError("Early departure grace minutes must be non-negative")
+        if self.overtime_threshold_minutes is not None and self.overtime_threshold_minutes < 0:
+            raise ValueError("Overtime threshold minutes must be non-negative")
+        if self.work_hours is not None and (self.work_hours <= 0 or self.work_hours > 24):
+            raise ValueError("Work hours must be between 0 and 24")
+        if self.break_start_time and self.break_end_time:
+            if self.break_start_time >= self.break_end_time:
+                raise ValueError("Break start time must be before break end time")
+        return self
 
 class ShiftSchema(ShiftBase):
     uuid: UUID4
@@ -198,6 +230,26 @@ class ShiftRosterResponse(BaseModel):
     success: bool
     message: str
     data: Optional[ShiftRosterSchema] = None
+
+class CalendarHoliday(BaseModel):
+    holiday_name: str
+    holiday_date: date
+    holiday_type: str
+
+class CalendarLeave(BaseModel):
+    leave_type_name: str
+    from_date: date
+    to_date: date
+    status: str
+    total_days: float
+
+class ShiftRosterCalendarResponse(BaseModel):
+    success: bool
+    message: str
+    rosters: List[ShiftRosterSchema]
+    holidays: List[CalendarHoliday]
+    leaves: List[CalendarLeave]
+    pagination: Optional[dict] = None
 
 class BulkShiftRosterCreate(BaseModel):
     entries: List[ShiftRosterCreate]
@@ -322,6 +374,8 @@ class AttendanceRecordSchema(BaseModel):
     late_by_minutes: int
     is_early_departure: bool
     early_departure_minutes: int
+    is_late_departure: bool = False
+    late_departure_minutes: int = 0
     is_manual_entry: bool = False
     manual_entry_reason: Optional[str] = None
     is_regularized: bool = False
@@ -408,6 +462,8 @@ class DashboardEmployeeStatus(BaseModel):
     late_by_minutes: int = 0
     is_early_departure: bool = False
     early_departure_minutes: int = 0
+    is_late_departure: bool = False
+    late_departure_minutes: int = 0
     
     class Config:
         from_attributes = True

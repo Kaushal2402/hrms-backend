@@ -179,6 +179,13 @@ def create_shift(
             }
         )
     
+    # If is_default is true, unset other defaults
+    if shift_in.is_default:
+        db.query(ShiftMaster).filter(
+            ShiftMaster.organization_id == current_org_id,
+            ShiftMaster.is_default == True
+        ).update({ShiftMaster.is_default: False})
+
     # Create new shift object
     db_shift = ShiftMaster(
         **shift_in.model_dump(),
@@ -276,6 +283,13 @@ def update_shift(
     
     # Update fields
     update_data = shift_in.model_dump(exclude_unset=True)
+    
+    # If is_default is true, unset other defaults
+    if update_data.get('is_default'):
+        db.query(ShiftMaster).filter(
+            ShiftMaster.organization_id == current_org_id,
+            ShiftMaster.is_default == True
+        ).update({ShiftMaster.is_default: False})
     for field, value in update_data.items():
         setattr(shift, field, value)
     

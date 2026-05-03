@@ -1,7 +1,7 @@
 from typing import List, Optional, Any
 from datetime import date
 from decimal import Decimal
-from pydantic import UUID4, BaseModel, field_validator
+from pydantic import UUID4, BaseModel, field_validator, model_validator
 from app.models.attendance import LeaveAccrualType, LeaveUnitType
 
 from app.schemas.department import PaginatedResponse
@@ -191,6 +191,13 @@ class LeavePolicyCreate(BaseModel):
     is_default: bool = False
     mappings: List[LeavePolicyMappingCreate] = []
 
+    @model_validator(mode='after')
+    def validate_dates(self) -> 'LeavePolicyCreate':
+        if self.effective_from and self.effective_to:
+            if self.effective_from >= self.effective_to:
+                raise ValueError("Effective From date must be before Effective To date")
+        return self
+
 class LeavePolicyResponse(BaseModel):
     success: bool
     message: str
@@ -208,6 +215,16 @@ class LeavePolicyUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_default: Optional[bool] = None
     mappings: Optional[List[LeavePolicyMappingCreate]] = None
+
+    @model_validator(mode='after')
+    def validate_dates(self) -> 'LeavePolicyUpdate':
+        from_date = self.effective_from
+        to_date = self.effective_to
+        
+        if from_date and to_date:
+            if from_date >= to_date:
+                raise ValueError("Effective From date must be before Effective To date")
+        return self
 
 class LeaveBalanceSchema(BaseModel):
     uuid: UUID4

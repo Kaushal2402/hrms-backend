@@ -3,7 +3,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from fastapi.responses import JSONResponse
-from datetime import datetime
+from datetime import datetime, date
+from sqlalchemy import or_, and_
 
 from app.api import deps
 from app.models.attendance import LeavePolicy, LeaveType, LeavePolicyMapping
@@ -30,6 +31,76 @@ def populate_policy_uuids(policy: LeavePolicy, db: Session) -> LeavePolicySchema
         result.location_uuids = [r[0] for r in loc_uuids]
         
     return result
+
+def check_policy_overlap(
+    db: Session,
+    org_id: int,
+    effective_from: date,
+    effective_to: Optional[date],
+    applicable_to: str,
+    department_ids: Optional[List[int]] = None,
+    location_ids: Optional[List[int]] = None,
+    employment_types: Optional[List[str]] = None,
+    exclude_policy_id: Optional[int] = None
+) -> Optional[LeavePolicy]:
+    """
+    Check if a new or updated policy overlaps with any existing policy in terms of 
+    dates and applicability.
+    """
+    query = db.query(LeavePolicy).filter(
+        LeavePolicy.organization_id == org_id,
+        LeavePolicy.is_deleted == False,
+        LeavePolicy.is_active == True
+    )
+    
+    if exclude_policy_id:
+        query = query.filter(LeavePolicy.id != exclude_policy_id)
+        
+    # Date Overlap Logic:
+    # (P1.start <= P2.end OR P2.end is NULL) AND (P1.end >= P2.start OR P1.end is NULL)
+    if effective_to:
+        query = query.filter(
+            and_(
+                LeavePolicy.effective_from <= effective_to,
+                or_(
+                    LeavePolicy.effective_to >= effective_from,
+                    LeavePolicy.effective_to == None
+                )
+            )
+        )
+    else:
+        query = query.filter(
+            or_(
+                LeavePolicy.effective_to >= effective_from,
+                LeavePolicy.effective_to == None
+            )
+        )
+        
+    existing_policies = query.all()
+    for ep in existing_policies:
+        # Case 1: Either is global
+        if applicable_to == "all" or ep.applicable_to == "all":
+            return ep
+            
+        # Case 2: Specific targets
+        # Check Department overlap
+        if applicable_to == "department" and ep.applicable_to == "department":
+            if ep.department_ids and department_ids:
+                if set(ep.department_ids) & set(department_ids):
+                    return ep
+        
+        # Check Location overlap
+        if applicable_to == "location" and ep.applicable_to == "location":
+            if ep.location_ids and location_ids:
+                if set(ep.location_ids) & set(location_ids):
+                    return ep
+                    
+        # Check Employment Type overlap (if any)
+        if employment_types and ep.employment_types:
+            if set(ep.employment_types) & set(employment_types):
+                return ep
+                
+    return None
 
 @router.get("/", response_model=LeavePolicyListResponse)
 def list_leave_policies(
@@ -136,23 +207,50 @@ def create_leave_policy(
         ).update({LeavePolicy.is_default: False})
 
     # 3. Resolve UUIDs to IDs
-    policy_data = policy_in.dict(exclude={'mappings', 'department_uuids', 'location_uuids'})
-    
+    dept_ids = []
     if policy_in.department_uuids:
-        dept_ids = db.query(Department.id).filter(
+        res = db.query(Department.id).filter(
             Department.uuid.in_(policy_in.department_uuids),
             Department.organization_id == current_org.id,
             Department.is_deleted == False
         ).all()
-        policy_data['department_ids'] = [r[0] for r in dept_ids]
+        dept_ids = [r[0] for r in res]
 
+    loc_ids = []
     if policy_in.location_uuids:
-        loc_ids = db.query(Location.id).filter(
+        res = db.query(Location.id).filter(
             Location.uuid.in_(policy_in.location_uuids),
             Location.organization_id == current_org.id,
             Location.is_deleted == False
         ).all()
-        policy_data['location_ids'] = [r[0] for r in loc_ids]
+        loc_ids = [r[0] for r in res]
+
+    # 4. Check for overlaps
+    overlap = check_policy_overlap(
+        db=db,
+        org_id=current_org.id,
+        effective_from=policy_in.effective_from,
+        effective_to=policy_in.effective_to,
+        applicable_to=policy_in.applicable_to,
+        department_ids=dept_ids,
+        location_ids=loc_ids,
+        employment_types=policy_in.employment_types
+    )
+    
+    if overlap:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False, 
+                "message": f"Policy overlaps with existing policy: {overlap.policy_name}", 
+                "data": None
+            }
+        )
+
+    # 5. Create Policy
+    policy_data = policy_in.dict(exclude={'mappings', 'department_uuids', 'location_uuids'})
+    policy_data['department_ids'] = dept_ids
+    policy_data['location_ids'] = loc_ids
 
     policy = LeavePolicy(**policy_data)
     policy.organization_id = current_org.id
@@ -294,6 +392,33 @@ def update_leave_policy(
             Location.is_deleted == False
         ).all()
         update_data['location_ids'] = [r[0] for r in loc_ids]
+
+    # 4. Check for overlaps if relevant fields changed
+    if any([policy_in.effective_from, policy_in.effective_to, policy_in.applicable_to, 
+            policy_in.department_uuids is not None, policy_in.location_uuids is not None,
+            policy_in.employment_types is not None]):
+        
+        overlap = check_policy_overlap(
+            db=db,
+            org_id=current_org.id,
+            effective_from=policy_in.effective_from or policy.effective_from,
+            effective_to=policy_in.effective_to if policy_in.effective_to is not None else policy.effective_to,
+            applicable_to=policy_in.applicable_to or policy.applicable_to,
+            department_ids=update_data.get('department_ids', policy.department_ids),
+            location_ids=update_data.get('location_ids', policy.location_ids),
+            employment_types=policy_in.employment_types or policy.employment_types,
+            exclude_policy_id=policy.id
+        )
+        
+        if overlap:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "success": False, 
+                    "message": f"Policy update results in overlap with existing policy: {overlap.policy_name}", 
+                    "data": None
+                }
+            )
 
     for field, value in update_data.items():
         setattr(policy, field, value)

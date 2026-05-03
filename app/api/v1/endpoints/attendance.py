@@ -108,9 +108,6 @@ def check_in(
 
     if not attendance_record:
         # Resolve Shift for this day
-        # Priority: 1. Published Roster
-        #           2. Future implementation: Default Organization Shift
-        
         roster = db.query(ShiftRoster).filter(
             ShiftRoster.employee_id == employee.id,
             ShiftRoster.roster_date == punch_date,
@@ -118,10 +115,34 @@ def check_in(
             ShiftRoster.is_deleted == False
         ).options(joinedload(ShiftRoster.shift)).first()
         
-        shift_id = roster.shift_id if roster else None
-        shift_start = roster.shift.start_time if roster else None
-        shift_end = roster.shift.end_time if roster else None
+        # Fetch Shift Master for grace periods
+        shift = None
+        if roster and roster.shift:
+            shift = roster.shift
+        else:
+            shift = db.query(ShiftMaster).filter(
+                ShiftMaster.organization_id == current_org_id,
+                ShiftMaster.is_default == True,
+                ShiftMaster.is_active == True
+            ).first()
+
+        shift_id = shift.id if shift else None
+        shift_start = shift.start_time if shift else None
+        shift_end = shift.end_time if shift else None
         
+        # Calculate Lateness
+        is_late = False
+        late_minutes = 0
+        if shift_start:
+            # Convert both to minutes from midnight for comparison
+            punch_min = punch_time.hour * 60 + punch_time.minute
+            shift_start_min = shift_start.hour * 60 + shift_start.minute
+            
+            grace = shift.late_arrival_grace_minutes if shift else 0
+            if punch_min > (shift_start_min + grace):
+                is_late = True
+                late_minutes = punch_min - shift_start_min
+
         attendance_record = AttendanceRecord(
             organization_id=current_org_id,
             employee_id=employee.id,
@@ -131,6 +152,8 @@ def check_in(
             shift_end_time=shift_end,
             first_check_in=punch_time,
             status=AttendanceStatus.PRESENT,
+            is_late=is_late,
+            late_by_minutes=late_minutes,
             check_in_latitude=check_in_in.latitude,
             check_in_longitude=check_in_in.longitude,
             check_in_location=check_in_in.location_name,
@@ -276,7 +299,7 @@ def check_out(
         attendance_record.check_out_source = check_out_in.source
         attendance_record.check_out_device_id = check_out_in.device_id
         
-        # Calculate Working Hours
+        # Calculate Working Hours & Early Departure
         if attendance_record.first_check_in:
             duration = punch_time - attendance_record.first_check_in
             total_seconds = duration.total_seconds()
@@ -285,6 +308,36 @@ def check_out(
             attendance_record.total_work_hours = round(hours, 2)
             # For now, net work hours = total work hours (breaks logic can be added later)
             attendance_record.net_work_hours = round(hours, 2)
+
+        # Early Departure Calculation
+        if attendance_record.shift_end_time:
+            # Shift end in minutes from midnight
+            shift_end_min = attendance_record.shift_end_time.hour * 60 + attendance_record.shift_end_time.minute
+            # Punch time in minutes (handle night shifts by adding 1440 if needed, but simplistic for now)
+            punch_min = punch_time.hour * 60 + punch_time.minute
+            
+            # If punch is on same day as attendance_date, and shift_end is also on same day
+            # Simplified: if punch is before shift end
+            
+            # Fetch Shift Master for grace periods
+            shift = db.query(ShiftMaster).filter(ShiftMaster.id == attendance_record.shift_id).first()
+            grace = shift.early_departure_grace_minutes if shift else 0
+            
+            if punch_min < (shift_end_min - grace):
+                attendance_record.is_early_departure = True
+                attendance_record.early_departure_minutes = shift_end_min - punch_min
+                attendance_record.is_late_departure = False
+                attendance_record.late_departure_minutes = 0
+            elif punch_min > shift_end_min:
+                attendance_record.is_early_departure = False
+                attendance_record.early_departure_minutes = 0
+                attendance_record.is_late_departure = True
+                attendance_record.late_departure_minutes = punch_min - shift_end_min
+            else:
+                attendance_record.is_early_departure = False
+                attendance_record.early_departure_minutes = 0
+                attendance_record.is_late_departure = False
+                attendance_record.late_departure_minutes = 0
 
     # 4. Synchronize with Shift Roster (mirror actual times)
     roster = db.query(ShiftRoster).filter(
@@ -1895,6 +1948,52 @@ def process_attendance_logs(
                 record.total_work_hours = round(duration, 2)
                 record.net_work_hours = round(duration, 2) # excluding breaks TODO
                 updated = True
+
+        # Calculate Lateness and Early Departure
+        if record.shift_id:
+            shift = db.query(ShiftMaster).filter(ShiftMaster.id == record.shift_id).first()
+            if shift:
+                # Late Arrival
+                if record.first_check_in:
+                    f_in = record.first_check_in
+                    f_in_min = f_in.hour * 60 + f_in.minute
+                    s_start_min = record.shift_start_time.hour * 60 + record.shift_start_time.minute
+                    grace_late = shift.late_arrival_grace_minutes or 0
+                    
+                    if f_in_min > (s_start_min + grace_late):
+                        record.is_late = True
+                        record.late_by_minutes = f_in_min - s_start_min
+                        updated = True
+                    else:
+                        record.is_late = False
+                        record.late_by_minutes = 0
+                        updated = True
+
+                # Early Departure
+                if record.last_check_out:
+                    l_out = record.last_check_out
+                    l_out_min = l_out.hour * 60 + l_out.minute
+                    s_end_min = record.shift_end_time.hour * 60 + record.shift_end_time.minute
+                    grace_early = shift.early_departure_grace_minutes or 0
+                    
+                    if l_out_min < (s_end_min - grace_early):
+                        record.is_early_departure = True
+                        record.early_departure_minutes = s_end_min - l_out_min
+                        record.is_late_departure = False
+                        record.late_departure_minutes = 0
+                        updated = True
+                    elif l_out_min > s_end_min:
+                        record.is_early_departure = False
+                        record.early_departure_minutes = 0
+                        record.is_late_departure = True
+                        record.late_departure_minutes = l_out_min - s_end_min
+                        updated = True
+                    else:
+                        record.is_early_departure = False
+                        record.early_departure_minutes = 0
+                        record.is_late_departure = False
+                        record.late_departure_minutes = 0
+                        updated = True
         
         if updated:
             records_updated += 1

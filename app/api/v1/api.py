@@ -6,7 +6,7 @@ from app.api.v1.endpoints import (
     overtime, timesheets, timesheet_entries, leave_types, leave_policies, leave_balances,
     leave_applications, leave_calendar, compensatory_offs, holidays, optional_holidays,
     leave_encashments, attendance_policies, geofence_locations, geofence,
-    approval_delegations, biometric, leave, reports, analytics, roles, permissions, industries, quick_setup
+    approval_delegations, biometric, leave, reports, analytics, dashboards, roles, permissions, industries, quick_setup
 )
 
 api_router = APIRouter()
@@ -46,6 +46,7 @@ api_router.include_router(biometric.router, prefix="/biometric", tags=["biometri
 api_router.include_router(leave.router, prefix="/leave", tags=["leave"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(permissions.router, prefix="/permissions", tags=["permissions"])
 api_router.include_router(industries.router, prefix="/industries", tags=["industries"])
