@@ -111,7 +111,7 @@ def _setup_location(db: Session, org: Organization) -> str:
             address_line2=org.address_line2,
             city=org.city,
             state=org.state,
-            country=org.country,
+            country=org.country or "India",
             pincode=org.pincode
         )
         db.add(new_loc)

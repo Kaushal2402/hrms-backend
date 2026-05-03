@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
 
 from app.api import deps
-from app.models.attendance import LeaveApplication, LeaveType, LeaveStatus, LeaveBalance, LeaveApprovalHistory, CompensatoryOff
-from app.models.employee import Employee
+from app.models.attendance import LeaveApplication, LeaveType, LeaveStatus, LeaveBalance, LeaveApprovalHistory, CompensatoryOff, LeaveUnitType, Holiday
+from app.models.employee import Employee, Gender, EmploymentStatus
 from app.models.organization import Organization
 from app.schemas.leave import (
     LeaveApplicationListResponse, LeaveApplicationCreate, LeaveApplicationResponse, 
@@ -199,18 +199,128 @@ def apply_for_leave(
             detail="Leave type not found"
         )
         
+    # 2.5. Eligibility Checks
+    # Gender Validation
+    if leave_type.gender_specific and employee.gender != leave_type.gender_specific:
+         raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{leave_type.leave_name} is only applicable for {leave_type.gender_specific} employees."
+        )
+        
+    # Probation Validation
+    if not leave_type.applicable_during_probation and employee.employment_status == EmploymentStatus.PROBATION:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{leave_type.leave_name} is not applicable during probation period."
+        )
+        
+    # Tenure / Wait Period Validation
+    if leave_type.available_after_months and leave_type.available_after_months > 0:
+        tenure_days = (from_date - employee.date_of_joining).days
+        tenure_months = tenure_days / 30.44
+        if tenure_months < leave_type.available_after_months:
+             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{leave_type.leave_name} is only available after {leave_type.available_after_months} months of service."
+            )
+        
     # 3. Calculate Total Days
     if is_half_day:
         total_days = Decimal('0.5')
     else:
-        # Basic calculation: days = (to - from) + 1
-        total_days = Decimal(str((to_date - from_date).days + 1))
+        # Fetch Holidays for the period
+        holidays = db.query(Holiday.holiday_date).filter(
+            Holiday.organization_id == current_org.id,
+            Holiday.is_deleted == False,
+            Holiday.holiday_date.between(from_date, to_date)
+        ).all()
+        holiday_dates = {h[0] for h in holidays}
+        
+        # Calculate duration day by day
+        from datetime import timedelta
+        current_dt = from_date
+        count = 0
+        while current_dt <= to_date:
+            is_weekend = current_dt.weekday() >= 5 # 5=Sat, 6=Sun
+            is_holiday = current_dt in holiday_dates
+            
+            should_count = True
+            if is_weekend and not leave_type.include_weekends:
+                should_count = False
+            if is_holiday and not leave_type.include_holidays:
+                should_count = False
+                
+            if should_count:
+                count += 1
+            current_dt += timedelta(days=1)
+            
+        total_days = Decimal(str(count))
         
     if total_days <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid leave period: end date is before start date."
         )
+
+    # 3.5. Policy Validations (Unit Type, Duration, Timing)
+    # Unit Type Validation
+    if is_half_day and leave_type.unit_type == LeaveUnitType.FULL_DAY:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{leave_type.leave_name} only allows full day applications."
+        )
+        
+    # Duration Validations
+    if leave_type.min_leaves_per_application is not None and total_days < leave_type.min_leaves_per_application:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Minimum {leave_type.min_leaves_per_application} days required for {leave_type.leave_name} application."
+        )
+        
+    if leave_type.max_leaves_per_application is not None and total_days > leave_type.max_leaves_per_application:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum {leave_type.max_leaves_per_application} days allowed for {leave_type.leave_name} per application."
+        )
+        
+    if leave_type.max_consecutive_days is not None and total_days > leave_type.max_consecutive_days:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"You cannot take more than {leave_type.max_consecutive_days} consecutive days of {leave_type.leave_name}."
+        )
+
+    # Timing Validations (Advance Notice & Backdated)
+    today = date.today()
+    days_diff = (from_date - today).days
+    
+    # Advance Notice
+    if leave_type.min_advance_days is not None and leave_type.min_advance_days > 0:
+        if days_diff < leave_type.min_advance_days:
+            # Only for future leaves (days_diff >= 0)
+            if days_diff >= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{leave_type.leave_name} requires at least {leave_type.min_advance_days} days advance notice. You applied {days_diff} days in advance."
+                )
+            
+    # Backdated
+    if days_diff < 0: # It's a backdated leave
+        backdated_days = abs(days_diff)
+        if leave_type.max_backdated_days is not None:
+            if backdated_days > leave_type.max_backdated_days:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Backdated leaves for {leave_type.leave_name} are limited to {leave_type.max_backdated_days} days. You are attempting {backdated_days} days."
+                )
+
+    # Documentation Validation
+    if leave_type.documentation_required:
+        if total_days >= Decimal(str(leave_type.documentation_required_after_days or 0)):
+            if not attachments:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Documentation is required for {leave_type.leave_name} applications of {total_days} days or more."
+                )
 
     # 4. Check for Overlapping Applications (PENDING or APPROVED)
     overlaps = db.query(LeaveApplication).filter(
@@ -242,11 +352,19 @@ def apply_for_leave(
                 detail="No leave balance found for this year. Please contact HR."
             )
             
-        if not leave_type.allow_negative_balance and (balance.available_balance < total_days):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Insufficient balance. Available: {balance.available_balance}, Requested: {total_days}"
-            )
+        if not leave_type.allow_negative_balance:
+            if balance.available_balance < total_days:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Insufficient balance. Available: {balance.available_balance}, Requested: {total_days}"
+                )
+        else:
+            if leave_type.max_negative_balance is not None:
+                if (balance.available_balance - total_days) < -leave_type.max_negative_balance:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Insufficient balance. Negative limit is {leave_type.max_negative_balance}. Available: {balance.available_balance}, Requested: {total_days}"
+                    )
     else:
         # Validate Comp-off Stack
         comp_offs = db.query(CompensatoryOff).filter(
@@ -276,11 +394,19 @@ def apply_for_leave(
                     detail=f"Comp-off covers only {total_comp_off_available} days. No leave balance found for the remaining {balance_needed_from_pool} days."
                 )
                 
-            if not leave_type.allow_negative_balance and (balance.available_balance < balance_needed_from_pool):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Insufficient combined balance. Comp-off: {total_comp_off_available}, Leave Pool: {balance.available_balance}. Total Requested: {total_days}"
-                )
+            if not leave_type.allow_negative_balance:
+                if balance.available_balance < balance_needed_from_pool:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Insufficient combined balance. Comp-off: {total_comp_off_available}, Leave Pool: {balance.available_balance}. Total Requested: {total_days}"
+                    )
+            else:
+                if leave_type.max_negative_balance is not None:
+                    if (balance.available_balance - balance_needed_from_pool) < -leave_type.max_negative_balance:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Insufficient combined balance. Negative limit is {leave_type.max_negative_balance}. Available: {balance.available_balance} (+ {total_comp_off_available} comp-off), Requested: {total_days}"
+                        )
              
         for c in comp_offs:
             if c.is_expired or c.is_lapsed:
@@ -318,8 +444,9 @@ def apply_for_leave(
         contact_phone=contact_phone,
         attachment_urls=attachment_paths,
         remarks=remarks,
-        status=LeaveStatus.PENDING,
-        current_approver_id=current_approver_id,
+        status=LeaveStatus.APPROVED if not leave_type.requires_approval else LeaveStatus.PENDING,
+        approved_at=datetime.utcnow() if not leave_type.requires_approval else None,
+        current_approver_id=current_approver_id if leave_type.requires_approval else None,
         is_comp_off=bool(compoff_application_uuids),
         comp_off_id=comp_offs[0].id if compoff_application_uuids else None # Linking to first as a primary reference
     )

@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from datetime import datetime, date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -92,9 +93,20 @@ def credit_leave_balance(
         db.flush()
         
     # 5. Update Balance
-    balance.credited += credit_in.days
-    balance.available_balance += credit_in.days
-    balance.total_balance += credit_in.days
+    days_to_add = credit_in.days
+    if leave_type.max_balance is not None:
+        if balance.available_balance + days_to_add > leave_type.max_balance:
+            days_to_add = max(Decimal('0'), Decimal(str(leave_type.max_balance)) - Decimal(str(balance.available_balance)))
+            
+    if days_to_add <= 0 and credit_in.days > 0:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"success": False, "message": f"Maximum balance of {leave_type.max_balance} reached. Cannot credit more leaves.", "data": None}
+        )
+
+    balance.credited += days_to_add
+    balance.available_balance += days_to_add
+    balance.total_balance += days_to_add
     
     # 6. Record in History
     history = LeaveAccrualHistory(
@@ -504,9 +516,17 @@ def process_accruals(
                 db.flush()
                 
             # 8. Record Transaction
-            balance.accrued += accrual_rate
-            balance.available_balance += accrual_rate
-            balance.total_balance += accrual_rate
+            accrued_to_add = Decimal(str(accrual_rate))
+            if leave_type.max_balance is not None:
+                if balance.available_balance + accrued_to_add > leave_type.max_balance:
+                    accrued_to_add = max(Decimal('0'), Decimal(str(leave_type.max_balance)) - Decimal(str(balance.available_balance)))
+            
+            if accrued_to_add <= 0:
+                continue # Skip if already at max balance
+                
+            balance.accrued += accrued_to_add
+            balance.available_balance += accrued_to_add
+            balance.total_balance += accrued_to_add
             balance.last_accrual_date = request.accrual_date
             
             history = LeaveAccrualHistory(
@@ -515,7 +535,7 @@ def process_accruals(
                 leave_balance_id=balance.id,
                 accrual_date=request.accrual_date,
                 accrual_period=accrual_period,
-                accrued_days=accrual_rate,
+                accrued_days=accrued_to_add,
                 transaction_type='monthly_accrual' if leave_type.accrual_type == LeaveAccrualType.MONTHLY else 'yearly_credit',
                 remarks=f"Automatic {leave_type.accrual_type.value} accrual for {accrual_period}",
                 balance_after=balance.available_balance

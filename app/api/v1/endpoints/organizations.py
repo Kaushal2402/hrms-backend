@@ -206,9 +206,9 @@ def update_organization(
     pan_number: str = Form(None),
     address_line1: str = Form(None),
     address_line2: str = Form(None),
-    city: str = Form(None),
+    city: str = Form(...),
     state: str = Form(None),
-    country: str = Form(None),
+    country: str = Form(...),
     pincode: str = Form(None),
     logo: UploadFile = File(None)
 ):
