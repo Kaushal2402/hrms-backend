@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
 
 from app.api import deps
-from app.models.attendance import LeaveApplication, LeaveType, LeaveStatus
-from app.models.employee import Employee
+from app.models.attendance import LeaveApplication, LeaveType, LeaveStatus, Holiday
+from app.models.employee import Employee, Department, Location
 from app.models.organization import Organization
-from app.schemas.leave import LeaveCalendarResponse, LeaveCalendarEvent
+from app.schemas.leave import LeaveCalendarResponse, LeaveCalendarEvent, HolidayCalendarEvent, LeaveCalendarData
 
 router = APIRouter()
 
@@ -50,34 +50,69 @@ def get_leave_calendar(
     elif to_date:
         query = query.filter(LeaveApplication.from_date <= to_date)
 
-    # 3. Department & Location Filters
+    # 5. Holiday Query
+    holiday_query = db.query(Holiday).filter(
+        Holiday.organization_id == current_org.id,
+        Holiday.is_active == True,
+        Holiday.is_deleted == False
+    )
+
+    if from_date and to_date:
+        holiday_query = holiday_query.filter(
+            Holiday.holiday_date >= from_date,
+            Holiday.holiday_date <= to_date
+        )
+    elif from_date:
+        holiday_query = holiday_query.filter(Holiday.holiday_date >= from_date)
+    elif to_date:
+        holiday_query = holiday_query.filter(Holiday.holiday_date <= to_date)
+
+    # Resolve IDs for Holiday filtering if needed
+    dept_id = None
     if department_uuid:
-        # Resolve department if needed or just use join
-        from app.models.employee import Department
         dept = db.query(Department).filter(Department.uuid == department_uuid).first()
         if dept:
-            query = query.filter(Employee.department_id == dept.id)
-        else:
-            return LeaveCalendarResponse(success=True, message="Department not found", data=[])
+            dept_id = dept.id
+            query = query.filter(Employee.department_id == dept_id) # Already filtered above but being safe
 
+    loc_id = None
     if location_uuid:
-        from app.models.employee import Location
         loc = db.query(Location).filter(Location.uuid == location_uuid).first()
         if loc:
-            query = query.filter(Employee.location_id == loc.id)
-        else:
-            return LeaveCalendarResponse(success=True, message="Location not found", data=[])
+            loc_id = loc.id
+            query = query.filter(Employee.location_id == loc_id) # Already filtered above but being safe
 
-    # 4. Fetch Results
+    # 6. Fetch Results
     applications = query.options(
         joinedload(LeaveApplication.employee),
         joinedload(LeaveApplication.leave_type)
     ).all()
 
-    # 5. Transform to Calendar Events
-    events = []
+    holidays = holiday_query.all()
+
+    # Filter holidays based on location/department if applicable
+    filtered_holidays = []
+    for h in holidays:
+        keep = True
+        if h.is_location_specific and loc_id:
+            if not h.location_ids or loc_id not in h.location_ids:
+                keep = False
+        elif h.is_location_specific and not loc_id:
+            # If searching globally, maybe show all? Or maybe location specific ones are only for their locations.
+            # Usually we show all holidays in a global calendar or just org-wide ones.
+            pass
+        
+        if keep and h.is_department_specific and dept_id:
+            if not h.department_ids or dept_id not in h.department_ids:
+                keep = False
+        
+        if keep:
+            filtered_holidays.append(h)
+
+    # 7. Transform to Calendar Events
+    leave_events = []
     for app in applications:
-        events.append(LeaveCalendarEvent(
+        leave_events.append(LeaveCalendarEvent(
             uuid=app.uuid,
             employee_name=f"{app.employee.first_name} {app.employee.last_name}",
             employee_uuid=app.employee.uuid,
@@ -89,10 +124,25 @@ def get_leave_calendar(
             total_days=app.total_days
         ))
 
+    holiday_events = []
+    for h in filtered_holidays:
+        holiday_events.append(HolidayCalendarEvent(
+            uuid=h.uuid,
+            holiday_name=h.holiday_name,
+            holiday_date=h.holiday_date,
+            holiday_type=h.holiday_type,
+            description=h.description,
+            is_optional=h.is_optional,
+            is_restricted=h.is_restricted
+        ))
+
     return LeaveCalendarResponse(
         success=True,
         message="Leave calendar retrieved successfully",
-        data=events
+        data=LeaveCalendarData(
+            leaves=leave_events,
+            holidays=holiday_events
+        )
     )
 
 @router.get("/team", response_model=LeaveCalendarResponse)
@@ -128,7 +178,7 @@ def get_team_leave_calendar(
         return LeaveCalendarResponse(
             success=True,
             message="No team members found for this manager",
-            data=[]
+            data=LeaveCalendarData(leaves=[], holidays=[])
         )
 
     # 3. Base Query
@@ -138,7 +188,7 @@ def get_team_leave_calendar(
         LeaveApplication.status.in_([LeaveStatus.PENDING, LeaveStatus.APPROVED])
     )
 
-    # 4. Date Range Filter
+    # 3.5 Date Range Filter for Leaves
     if from_date and to_date:
         query = query.filter(
             or_(
@@ -152,16 +202,35 @@ def get_team_leave_calendar(
     elif to_date:
         query = query.filter(LeaveApplication.from_date <= to_date)
 
+    # 4. Holiday Query
+    holiday_query = db.query(Holiday).filter(
+        Holiday.organization_id == current_org.id,
+        Holiday.is_active == True,
+        Holiday.is_deleted == False
+    )
+
+    if from_date and to_date:
+        holiday_query = holiday_query.filter(
+            Holiday.holiday_date >= from_date,
+            Holiday.holiday_date <= to_date
+        )
+    elif from_date:
+        holiday_query = holiday_query.filter(Holiday.holiday_date >= from_date)
+    elif to_date:
+        holiday_query = holiday_query.filter(Holiday.holiday_date <= to_date)
+
     # 5. Fetch Results
     applications = query.options(
         joinedload(LeaveApplication.employee),
         joinedload(LeaveApplication.leave_type)
     ).all()
 
+    holidays = holiday_query.all()
+
     # 6. Transform to Calendar Events
-    events = []
+    leave_events = []
     for app in applications:
-        events.append(LeaveCalendarEvent(
+        leave_events.append(LeaveCalendarEvent(
             uuid=app.uuid,
             employee_name=f"{app.employee.first_name} {app.employee.last_name}",
             employee_uuid=app.employee.uuid,
@@ -173,8 +242,23 @@ def get_team_leave_calendar(
             total_days=app.total_days
         ))
 
+    holiday_events = []
+    for h in holidays:
+        holiday_events.append(HolidayCalendarEvent(
+            uuid=h.uuid,
+            holiday_name=h.holiday_name,
+            holiday_date=h.holiday_date,
+            holiday_type=h.holiday_type,
+            description=h.description,
+            is_optional=h.is_optional,
+            is_restricted=h.is_restricted
+        ))
+
     return LeaveCalendarResponse(
         success=True,
         message="Team leave calendar retrieved successfully",
-        data=events
+        data=LeaveCalendarData(
+            leaves=leave_events,
+            holidays=holiday_events
+        )
     )

@@ -65,7 +65,8 @@ from app.schemas.employee import (
 from app.schemas.leave import (
     LeaveBalanceListResponse, LeaveAccrualHistoryListResponse,
     LeaveApplicationListResponse, LeaveCalendarResponse, LeaveCalendarEvent,
-    EmployeeCompOffResponse, EmployeeCompOffListResponse
+    EmployeeCompOffResponse, EmployeeCompOffListResponse,
+    HolidayCalendarEvent, LeaveCalendarData
 )
 from app.schemas.holiday import EmployeeOptionalHolidayListResponse, HolidayListResponse
 from app.schemas.attendance import (
@@ -562,6 +563,80 @@ def create_employee(
         success=True,
         message="Employee created successfully",
         data=db_obj
+    )
+
+@router.post("/{employee_uuid}/send-invitation", response_model=EmployeeResponse)
+def send_employee_invitation(
+    employee_uuid: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(deps.get_db),
+    current_org: Organization = Depends(deps.get_current_org),
+    authorized: bool = Depends(deps.check_permission("1"))
+):
+    """
+    Send invitation email to a specific employee to set their password.
+    """
+    employee = db.query(Employee).filter(
+        Employee.uuid == employee_uuid,
+        Employee.organization_id == current_org.id,
+        Employee.is_deleted == False
+    ).first()
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    if employee.hashed_password:
+         raise HTTPException(status_code=400, detail="Employee has already set their password")
+
+    # Generate invitation token and schedule email
+    invite_token = security.create_access_token(subject=str(employee.uuid), expires_delta=timedelta(hours=24))
+    employee.reset_password_token = invite_token
+    employee.reset_password_token_expires_at = datetime.utcnow() + timedelta(hours=24)
+    db.commit()
+
+    background_tasks.add_task(send_set_password_email, employee.work_email, invite_token, employee.first_name)
+
+    return EmployeeResponse(
+        success=True,
+        message="Invitation email sent successfully",
+        data=employee
+    )
+
+@router.post("/send-invitations-all", response_model=EmployeeDeleteResponse)
+def send_all_employee_invitations(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(deps.get_db),
+    current_org: Organization = Depends(deps.get_current_org),
+    authorized: bool = Depends(deps.check_permission("1"))
+):
+    """
+    Send invitation email to all employees who haven't set their password.
+    """
+    employees = db.query(Employee).filter(
+        Employee.organization_id == current_org.id,
+        Employee.is_deleted == False,
+        or_(Employee.hashed_password == None, Employee.hashed_password == "")
+    ).all()
+    
+    if not employees:
+        return EmployeeDeleteResponse(
+            success=True, 
+            message="No employees found without passwords", 
+            data=None
+        )
+        
+    for employee in employees:
+        invite_token = security.create_access_token(subject=str(employee.uuid), expires_delta=timedelta(hours=24))
+        employee.reset_password_token = invite_token
+        employee.reset_password_token_expires_at = datetime.utcnow() + timedelta(hours=24)
+        background_tasks.add_task(send_set_password_email, employee.work_email, invite_token, employee.first_name)
+    
+    db.commit()
+
+    return EmployeeDeleteResponse(
+        success=True, 
+        message=f"Invitations sent to {len(employees)} employees", 
+        data={"count": len(employees)}
     )
 
 @router.get("/export")
@@ -1546,10 +1621,48 @@ def get_employee_leave_calendar(
         joinedload(LeaveApplication.leave_type)
     ).all()
 
+    # 4.5 Fetch Holidays
+    from sqlalchemy import JSON
+    holiday_query = db.query(Holiday).filter(
+        Holiday.organization_id == current_org.id,
+        Holiday.is_active == True,
+        Holiday.is_deleted == False
+    )
+    if from_date:
+        holiday_query = holiday_query.filter(Holiday.holiday_date >= from_date)
+    if to_date:
+        holiday_query = holiday_query.filter(Holiday.holiday_date <= to_date)
+    
+    # Filter for Location/Department
+    location_conditions = [Holiday.is_location_specific == False]
+    if employee.location_id is not None:
+        location_conditions.append(
+            and_(
+                Holiday.is_location_specific == True,
+                Holiday.location_ids.isnot(None),
+                func.json_contains(Holiday.location_ids, func.cast(employee.location_id, JSON)) == 1
+            )
+        )
+    location_filter = or_(*location_conditions)
+    
+    department_conditions = [Holiday.is_department_specific == False]
+    if employee.department_id is not None:
+        department_conditions.append(
+            and_(
+                Holiday.is_department_specific == True,
+                Holiday.department_ids.isnot(None),
+                func.json_contains(Holiday.department_ids, func.cast(employee.department_id, JSON)) == 1
+            )
+        )
+    department_filter = or_(*department_conditions)
+    
+    holiday_query = holiday_query.filter(location_filter, department_filter)
+    holidays = holiday_query.all()
+
     # 5. Transform to Calendar Events
-    events = []
+    leave_events = []
     for app in applications:
-        events.append(LeaveCalendarEvent(
+        leave_events.append(LeaveCalendarEvent(
             uuid=app.uuid,
             employee_name=f"{employee.first_name} {employee.last_name}",
             employee_uuid=employee.uuid,
@@ -1561,10 +1674,25 @@ def get_employee_leave_calendar(
             total_days=app.total_days
         ))
 
+    holiday_events = []
+    for h in holidays:
+        holiday_events.append(HolidayCalendarEvent(
+            uuid=h.uuid,
+            holiday_name=h.holiday_name,
+            holiday_date=h.holiday_date,
+            holiday_type=h.holiday_type,
+            description=h.description,
+            is_optional=h.is_optional,
+            is_restricted=h.is_restricted
+        ))
+
     return LeaveCalendarResponse(
         success=True,
         message="Employee leave calendar retrieved successfully",
-        data=events
+        data=LeaveCalendarData(
+            leaves=leave_events,
+            holidays=holiday_events
+        )
     )
 
 @router.get("/{employee_id}/compensatory-offs", response_model=EmployeeCompOffListResponse)

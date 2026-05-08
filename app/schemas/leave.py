@@ -435,10 +435,23 @@ class LeaveCalendarEvent(BaseModel):
     is_half_day: bool
     total_days: Decimal
 
+class HolidayCalendarEvent(BaseModel):
+    uuid: UUID4
+    holiday_name: str
+    holiday_date: date
+    holiday_type: str
+    description: Optional[str] = None
+    is_optional: bool = False
+    is_restricted: bool = False
+
+class LeaveCalendarData(BaseModel):
+    leaves: List[LeaveCalendarEvent]
+    holidays: List[HolidayCalendarEvent]
+
 class LeaveCalendarResponse(BaseModel):
     success: bool
     message: str
-    data: List[LeaveCalendarEvent]
+    data: LeaveCalendarData
 
 class LeaveConflictCheckRequest(BaseModel):
     employee_uuid: UUID4

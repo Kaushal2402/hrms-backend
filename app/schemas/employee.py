@@ -222,6 +222,17 @@ class EmployeeUpdate(BaseModel):
             raise ValueError('Date of confirmation must be in the past or today')
         return v
 
+class EmployeeSummarySchema(BaseModel):
+    uuid: UUID4
+    first_name: str
+    last_name: str
+    job_title: Optional[JobTitleSchema] = None
+    department: Optional[DepartmentSchema] = None
+    is_password_set: bool = False
+    
+    class Config:
+        from_attributes = True
+
 class EmployeeSchema(EmployeeBase):
     id: int
     uuid: UUID4
@@ -230,8 +241,10 @@ class EmployeeSchema(EmployeeBase):
     job_title: Optional[JobTitleSchema] = None
     department: Optional[DepartmentSchema] = None
     location: Optional[LocationSchema] = None
-    reporting_manager: Optional['EmployeeSchema'] = None
+    reporting_manager: Optional[EmployeeSummarySchema] = None
+    functional_manager: Optional[EmployeeSummarySchema] = None
     role: Optional[Role] = None
+    is_password_set: bool = False
     
     # We remove the _id fields that returned UUIDs, fulfilling the request to "share the object"
     
@@ -510,15 +523,6 @@ class CertificationListResponse(BaseModel):
     message: str
     data: List[CertificationSchema] = []
 
-class EmployeeSummarySchema(BaseModel):
-    uuid: UUID4
-    first_name: str
-    last_name: str
-    job_title: Optional[JobTitleSchema] = None
-    department: Optional[DepartmentSchema] = None
-    
-    class Config:
-        from_attributes = True
 
 class ExpiringCertificationSchema(CertificationSchema):
     employee: EmployeeSummarySchema

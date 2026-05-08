@@ -211,6 +211,10 @@ class Employee(Base):
     def reporting_manager_name(self) -> Optional[str]:
         return self.reporting_manager.full_name if self.reporting_manager else None
 
+    @property
+    def is_password_set(self) -> bool:
+        return self.hashed_password is not None and len(self.hashed_password) > 0
+
     # Composite Index for organization-specific queries
     __table_args__ = (
         Index('idx_org_emp_status', 'organization_id', 'employment_status'),
