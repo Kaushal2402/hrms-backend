@@ -2531,8 +2531,33 @@ def approve_attendance_regularization(
     # Apply requested times
     if regularization.requested_check_in:
         record.first_check_in = regularization.requested_check_in
+        log_in = AttendanceLog(
+            organization_id=current_org_id,
+            employee_id=regularization.employee_id,
+            punch_time=regularization.requested_check_in,
+            punch_date=regularization.attendance_date,
+            check_type=CheckType.CHECK_IN,
+            source=AttendanceSource.MANUAL,
+            is_processed=True,
+            attendance_record_id=record.id,
+            validation_notes="Added via Regularization"
+        )
+        db.add(log_in)
+
     if regularization.requested_check_out:
         record.last_check_out = regularization.requested_check_out
+        log_out = AttendanceLog(
+            organization_id=current_org_id,
+            employee_id=regularization.employee_id,
+            punch_time=regularization.requested_check_out,
+            punch_date=regularization.attendance_date,
+            check_type=CheckType.CHECK_OUT,
+            source=AttendanceSource.MANUAL,
+            is_processed=True,
+            attendance_record_id=record.id,
+            validation_notes="Added via Regularization"
+        )
+        db.add(log_out)
         
     record.is_regularized = True
     record.regularization_id = regularization.id
@@ -2540,6 +2565,46 @@ def approve_attendance_regularization(
     # Update Status if it was absent
     if record.status == AttendanceStatus.ABSENT:
         record.status = AttendanceStatus.PRESENT
+
+    # Fetch shift to determine grace periods
+    shift = None
+    if record.shift_id:
+        shift = db.query(ShiftMaster).filter(ShiftMaster.id == record.shift_id).first()
+
+    # Recalculate Lateness
+    if record.shift_start_time and record.first_check_in:
+        f_in_min = record.first_check_in.hour * 60 + record.first_check_in.minute
+        s_start_min = record.shift_start_time.hour * 60 + record.shift_start_time.minute
+        grace_late = shift.late_arrival_grace_minutes if shift else 0
+        
+        if f_in_min > (s_start_min + grace_late):
+            record.is_late = True
+            record.late_by_minutes = f_in_min - s_start_min
+        else:
+            record.is_late = False
+            record.late_by_minutes = 0
+
+    # Recalculate Early/Late Departure
+    if record.shift_end_time and record.last_check_out:
+        l_out_min = record.last_check_out.hour * 60 + record.last_check_out.minute
+        s_end_min = record.shift_end_time.hour * 60 + record.shift_end_time.minute
+        grace_early = shift.early_departure_grace_minutes if shift else 0
+        
+        if l_out_min < (s_end_min - grace_early):
+            record.is_early_departure = True
+            record.early_departure_minutes = s_end_min - l_out_min
+            record.is_late_departure = False
+            record.late_departure_minutes = 0
+        elif l_out_min > s_end_min:
+            record.is_early_departure = False
+            record.early_departure_minutes = 0
+            record.is_late_departure = True
+            record.late_departure_minutes = l_out_min - s_end_min
+        else:
+            record.is_early_departure = False
+            record.early_departure_minutes = 0
+            record.is_late_departure = False
+            record.late_departure_minutes = 0
 
     # Recalculate Hours
     if record.first_check_in and record.last_check_out:

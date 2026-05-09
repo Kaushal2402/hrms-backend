@@ -114,6 +114,7 @@ class EmployeeBase(BaseModel):
     # I'll put specific ID fields in Create.
 
     is_active: Optional[bool] = True
+    photograph_url: Optional[str] = None
 
 class EmployeeCreate(EmployeeBase):
     personal_email: EmailStr  # Required per prompt
@@ -229,6 +230,7 @@ class EmployeeSummarySchema(BaseModel):
     job_title: Optional[JobTitleSchema] = None
     department: Optional[DepartmentSchema] = None
     is_password_set: bool = False
+    photograph_url: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -762,6 +764,7 @@ class EmployeeMinimalSchema(BaseModel):
     last_name: str
     job_title_name: Optional[str] = None
     department_name: Optional[str] = None
+    photograph_url: Optional[str] = None
     
     @computed_field
     @property

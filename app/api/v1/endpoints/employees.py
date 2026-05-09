@@ -5418,3 +5418,164 @@ def get_employee_active_delegations(
         }
     )
 
+@router.post("/{employee_id}/profile-picture", response_model=EmployeeResponse)
+def upload_employee_profile_picture(
+    employee_id: str,
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: Session = Depends(deps.get_db),
+    current_org: Organization = Depends(deps.get_current_org),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    """
+    Upload or update employee profile picture.
+    """
+    # 1. Resolve Employee
+    employee = None
+    try:
+        uuid_obj = uuid.UUID(employee_id)
+        employee = db.query(Employee).filter(
+            Employee.uuid == uuid_obj, Employee.organization_id == current_org.id
+        ).first()
+    except ValueError:
+        pass
+    
+    if not employee:   
+         try:
+            int_id = int(employee_id)
+            employee = db.query(Employee).filter(Employee.id == int_id, Employee.organization_id == current_org.id).first()
+         except ValueError:
+             pass
+             
+    if not employee:
+        employee = db.query(Employee).filter(Employee.employee_code == employee_id, Employee.organization_id == current_org.id).first()
+        
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # 2. RBAC & Ownership Check
+    is_manager = deps.has_permission(db, current_user, "3")
+    is_owner = isinstance(current_user, Employee) and current_user.id == employee.id
+    
+    if not (isinstance(current_user, Organization) or is_manager or is_owner):
+        raise HTTPException(
+            status_code=403, 
+            detail="You do not have permission to update profile picture for this employee"
+        )
+        
+    # 3. Save File
+    upload_dir = os.path.join("uploads", str(current_org.uuid), "employee", str(employee.uuid), "profile")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    import mimetypes
+    file_ext = os.path.splitext(file.filename)[1]
+    if not file_ext and file.content_type:
+        file_ext = mimetypes.guess_extension(file.content_type) or ""
+        
+    safe_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(upload_dir, safe_filename)
+    
+    # Remove old picture if exists
+    if employee.photograph_url and "/static/" in employee.photograph_url:
+        parts = employee.photograph_url.split("/static/")
+        if len(parts) == 2:
+            old_file_path = os.path.join("uploads", parts[1])
+            if os.path.exists(old_file_path):
+                try:
+                    os.remove(old_file_path)
+                except OSError:
+                    pass
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    # URL generation
+    base_url = str(request.base_url).rstrip("/") if request else ""
+    file_url = f"{base_url}/static/{current_org.uuid}/employee/{employee.uuid}/profile/{safe_filename}"
+    
+    # 4. Update DB Record
+    employee.photograph_url = file_url
+    
+    try:
+        db.commit()
+        db.refresh(employee)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    return EmployeeResponse(
+        success=True,
+        message="Profile picture updated successfully",
+        data=employee
+    )
+
+@router.delete("/{employee_id}/profile-picture", response_model=EmployeeResponse)
+def delete_employee_profile_picture(
+    employee_id: str,
+    db: Session = Depends(deps.get_db),
+    current_org: Organization = Depends(deps.get_current_org),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    """
+    Delete employee profile picture.
+    """
+    # 1. Resolve Employee
+    employee = None
+    try:
+        uuid_obj = uuid.UUID(employee_id)
+        employee = db.query(Employee).filter(
+            Employee.uuid == uuid_obj, Employee.organization_id == current_org.id
+        ).first()
+    except ValueError:
+        pass
+    
+    if not employee:   
+         try:
+            int_id = int(employee_id)
+            employee = db.query(Employee).filter(Employee.id == int_id, Employee.organization_id == current_org.id).first()
+         except ValueError:
+             pass
+             
+    if not employee:
+        employee = db.query(Employee).filter(Employee.employee_code == employee_id, Employee.organization_id == current_org.id).first()
+        
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # 2. RBAC & Ownership Check
+    is_manager = deps.has_permission(db, current_user, "3")
+    is_owner = isinstance(current_user, Employee) and current_user.id == employee.id
+    
+    if not (isinstance(current_user, Organization) or is_manager or is_owner):
+        raise HTTPException(
+            status_code=403, 
+            detail="You do not have permission to delete profile picture for this employee"
+        )
+        
+    # 3. Delete File from Disk
+    if employee.photograph_url and "/static/" in employee.photograph_url:
+        parts = employee.photograph_url.split("/static/")
+        if len(parts) == 2:
+            file_path = os.path.join("uploads", parts[1])
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+                    
+    # 4. Update DB Record
+    employee.photograph_url = None
+    
+    try:
+        db.commit()
+        db.refresh(employee)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    return EmployeeResponse(
+        success=True,
+        message="Profile picture deleted successfully",
+        data=employee
+    )
+

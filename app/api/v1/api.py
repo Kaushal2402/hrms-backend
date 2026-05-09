@@ -6,7 +6,8 @@ from app.api.v1.endpoints import (
     overtime, timesheets, timesheet_entries, leave_types, leave_policies, leave_balances,
     leave_applications, leave_calendar, compensatory_offs, holidays, optional_holidays,
     leave_encashments, attendance_policies, geofence_locations, geofence,
-    approval_delegations, biometric, leave, reports, analytics, dashboards, roles, permissions, industries, quick_setup
+    approval_delegations, biometric, leave, reports, analytics, dashboards, roles, permissions, industries, quick_setup,
+    clients, projects, tasks, activity_types, timesheet_policies
 )
 
 api_router = APIRouter()
@@ -51,3 +52,11 @@ api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(permissions.router, prefix="/permissions", tags=["permissions"])
 api_router.include_router(industries.router, prefix="/industries", tags=["industries"])
 api_router.include_router(quick_setup.router, prefix="/quick-setup", tags=["quick_setup"])
+
+# Project & Task Master (Timesheet)
+api_router.include_router(clients.router, prefix="/clients", tags=["clients"])
+api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
+api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
+api_router.include_router(activity_types.router, prefix="/activity-types", tags=["activity_types"])
+api_router.include_router(timesheet_policies.router, prefix="/timesheet-policies", tags=["timesheet_policies"])
+

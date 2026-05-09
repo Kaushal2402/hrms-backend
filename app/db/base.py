@@ -27,4 +27,8 @@ from app.models.industry_templates import (
     IndustryLeaveTypeTemplate, IndustryLeavePolicyTemplate,
     QuickSetupJob
 ) # noqa
+from app.models.projects import (
+    ProjectClient, Project, ProjectTask, ProjectMember,
+    ActivityType, TimesheetPolicy
+) # noqa
 

@@ -1849,20 +1849,22 @@ class TimesheetEntry(Base):
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False, index=True)
     entry_date = Column(Date, nullable=False, index=True)
     
-    # Project/Task Allocation
-    project_id = Column(Integer, nullable=True, index=True)
-    project_name = Column(String(200), nullable=True)
-    task_id = Column(Integer, nullable=True)
-    task_name = Column(String(200), nullable=True)
+    # Project/Task Allocation — FK-linked to master tables
+    # Legacy free-text fields are preserved as cache/fallback for old entries
+    project_id = Column(Integer, ForeignKey('projects.id'), nullable=True, index=True)
+    project_name = Column(String(200), nullable=True)  # Cache / fallback for legacy entries
+    task_id = Column(Integer, ForeignKey('project_tasks.id'), nullable=True)   # Required by policy
+    task_name = Column(String(200), nullable=True)     # Cache / fallback
+    activity_type_id = Column(Integer, ForeignKey('activity_types.id'), nullable=True)
     activity_description = Column(Text, nullable=True)
     
     # Hours
     hours_worked = Column(Numeric(5, 2), nullable=False)
     is_billable = Column(Boolean, default=True)
-    
-    # Client Information
-    client_id = Column(Integer, nullable=True)
-    client_name = Column(String(200), nullable=True)
+
+    # Client resolved via project → client (kept as cache for legacy)
+    client_id = Column(Integer, nullable=True)          # Legacy field — no FK
+    client_name = Column(String(200), nullable=True)    # Cache / fallback
     
     # Notes
     notes = Column(Text, nullable=True)
