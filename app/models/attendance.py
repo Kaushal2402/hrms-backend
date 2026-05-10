@@ -1876,6 +1876,30 @@ class TimesheetEntry(Base):
 
     # Relationships
     timesheet = relationship("Timesheet", back_populates="entries")
+    project = relationship("Project", foreign_keys=[project_id], lazy="joined")
+    task = relationship("ProjectTask", foreign_keys=[task_id], lazy="joined")
+
+    @property
+    def project_uuid(self):
+        return self.project.uuid if self.project else None
+
+    @property
+    def task_uuid(self):
+        return self.task.uuid if self.task else None
+
+    @property
+    def client(self):
+        # Resolve via project -> client if available
+        if self.project:
+            return self.project.client
+        return None
+
+    @property
+    def client_uuid(self):
+        # Resolve via project -> client if available
+        if self.project and self.project.client:
+            return self.project.client.uuid
+        return None
 
 
 # ============================================================================

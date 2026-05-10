@@ -1,18 +1,19 @@
 from typing import Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 import uuid
 from datetime import datetime
 
 from app.api import deps
 from app.models.organization import Organization
 from app.models.employee import Employee
-from app.models.projects import Project, ProjectClient, ProjectMember, ProjectTask
+from app.models.projects import Project, ProjectClient, ProjectMember, ProjectTask, ProjectStatus, ProjectType
 from app.schemas.projects import (
     ProjectCreate, ProjectUpdate, ProjectSchema, ProjectDetailSchema, ProjectResponse, ProjectListResponse,
     ProjectMemberCreate, ProjectMemberUpdate, ProjectMemberSchema,
-    ProjectMemberResponse, ProjectMemberListResponse
+    ProjectMemberResponse, ProjectMemberListResponse,
+    ProjectEmployeeViewSchema, ProjectEmployeeViewListResponse
 )
 
 router = APIRouter()
@@ -46,7 +47,8 @@ def lookup_projects(
     search: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=200),
-    assigned_only: bool = Query(False, description="Only return projects the employee is a member of")
+    assigned_only: bool = Query(False, description="Only return projects the employee is a member of"),
+    employee_uuid: Optional[uuid.UUID] = Query(None, description="Filter by employee membership")
 ):
     """Open lookup for dropdowns. No RBAC required."""
     org_id = _org_id(current_user)
@@ -60,10 +62,17 @@ def lookup_projects(
     if search:
         query = query.filter(Project.project_name.ilike(f"%{search}%"))
 
-    # If employee login and assigned_only=True, filter to assigned projects only
-    if assigned_only and isinstance(current_user, Employee):
+    # Membership Filtering
+    target_employee_id = None
+    if employee_uuid:
+        emp = _resolve_employee(db, employee_uuid, org_id)
+        target_employee_id = emp.id
+    elif assigned_only and isinstance(current_user, Employee):
+        target_employee_id = current_user.id
+
+    if target_employee_id:
         query = query.join(ProjectMember, ProjectMember.project_id == Project.id).filter(
-            ProjectMember.employee_id == current_user.id,
+            ProjectMember.employee_id == target_employee_id,
             ProjectMember.is_active == True
         )
 
@@ -81,6 +90,106 @@ def lookup_projects(
             } for p in projects
         ]
     }
+
+
+@router.get("/assigned", response_model=ProjectEmployeeViewListResponse)
+def get_assigned_projects(
+    employee_uuid: Optional[uuid.UUID] = Query(None, description="Employee UUID. If not provided, returns projects for the current logged-in employee."),
+    search: Optional[str] = Query(None),
+    status: Optional[ProjectStatus] = Query(None),
+    project_type: Optional[ProjectType] = Query(None),
+    sort_by: str = Query("project_name", pattern="^(project_code|project_name|project_type|status|priority)$"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    """
+    Get list of projects assigned to an employee with searching, filtering, and pagination.
+    Does NOT include financial, billing, or accounting details.
+    """
+    org_id = _org_id(current_user)
+    
+    # 1. Resolve Target Employee
+    target_employee_id = None
+    if employee_uuid:
+        emp = _resolve_employee(db, employee_uuid, org_id)
+        target_employee_id = emp.id
+    elif isinstance(current_user, Employee):
+        target_employee_id = current_user.id
+    else:
+        raise HTTPException(status_code=400, detail="employee_uuid is required for organization users")
+
+    # 2. Build Query
+    query = db.query(ProjectMember).join(Project).options(
+        joinedload(ProjectMember.project).joinedload(Project.client),
+        joinedload(ProjectMember.project).joinedload(Project.project_manager)
+    ).filter(
+        ProjectMember.employee_id == target_employee_id,
+        ProjectMember.is_active == True,
+        Project.is_deleted == False,
+        Project.organization_id == org_id
+    )
+
+    # 3. Apply Filters
+    if status:
+        query = query.filter(Project.status == status)
+    if project_type:
+        query = query.filter(Project.project_type == project_type)
+    if search:
+        query = query.filter(
+            or_(
+                Project.project_name.ilike(f"%{search}%"),
+                Project.project_code.ilike(f"%{search}%")
+            )
+        )
+
+    # 4. Apply Sorting
+    sort_attr = getattr(Project, sort_by)
+    if sort_order == "desc":
+        query = query.order_by(sort_attr.desc())
+    else:
+        query = query.order_by(sort_attr.asc())
+
+    # 5. Pagination
+    total_records = query.count()
+    total_pages = (total_records + limit - 1) // limit
+    
+    members = query.offset((page - 1) * limit).limit(limit).all()
+
+    # 6. Format Response
+    data = []
+    for member in members:
+        p = member.project
+        data.append(ProjectEmployeeViewSchema(
+            uuid=p.uuid,
+            project_code=p.project_code,
+            project_name=p.project_name,
+            description=p.description,
+            project_type=p.project_type,
+            status=p.status,
+            priority=p.priority,
+            start_date=p.start_date,
+            end_date=p.end_date,
+            color_code=p.color_code,
+            tags=p.tags,
+            client_name=p.client.client_name if p.client else None,
+            project_manager_name=p.project_manager.full_name if p.project_manager else None,
+            role=member.role
+        ))
+
+    return ProjectEmployeeViewListResponse(
+        success=True,
+        message="Assigned projects retrieved successfully",
+        data=data,
+        pagination={
+            "total_records": total_records,
+            "current_page": page,
+            "total_pages": total_pages,
+            "page_size": limit
+        }
+    )
 
 
 # -------------------------------------------------------
@@ -283,7 +392,7 @@ def list_project_members(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require(db, current_user, "91", "view members of")
+    """List members of a project. No RBAC required for lookup purposes."""
     project = db.query(Project).filter(Project.uuid == project_uuid, Project.organization_id == _org_id(current_user), Project.is_deleted == False).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")

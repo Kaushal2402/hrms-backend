@@ -9,6 +9,7 @@ from app.models.attendance import (
     ShiftType, RegularizationStatus, OvertimeStatus, TimesheetStatus,
     DelegationType, CompensationType
 )
+from app.schemas.projects import ProjectSchema, ProjectTaskSchema, ProjectClientSchema
 
 class ShiftBase(BaseModel):
     shift_code: str
@@ -625,16 +626,20 @@ class OvertimeSummaryResponse(BaseModel):
 class TimesheetEntrySchema(BaseModel):
     uuid: UUID4
     entry_date: date
-    project_id: Optional[int] = None
+    project_uuid: Optional[UUID4] = None
     project_name: Optional[str] = None
-    task_id: Optional[int] = None
+    task_uuid: Optional[UUID4] = None
     task_name: Optional[str] = None
     activity_description: Optional[str] = None
     hours_worked: Decimal
     is_billable: bool
-    client_id: Optional[int] = None
+    client_uuid: Optional[UUID4] = None
     client_name: Optional[str] = None
     notes: Optional[str] = None
+    
+    project: Optional[ProjectSchema] = None
+    task: Optional[ProjectTaskSchema] = None
+    client: Optional[ProjectClientSchema] = None
 
     class Config:
         from_attributes = True
@@ -674,15 +679,12 @@ class TimesheetResponse(BaseModel):
 
 class TimesheetEntryCreate(BaseModel):
     entry_date: date
-    project_id: Optional[int] = None
-    project_name: Optional[str] = None
-    task_id: Optional[int] = None
-    task_name: Optional[str] = None
+    project_uuid: Optional[UUID4] = None
+    task_uuid: Optional[UUID4] = None
     activity_description: Optional[str] = None
     hours_worked: Decimal
     is_billable: bool = True
-    client_id: Optional[int] = None
-    client_name: Optional[str] = None
+    client_uuid: Optional[UUID4] = None
     notes: Optional[str] = None
 
 class TimesheetCreate(BaseModel):
@@ -710,15 +712,12 @@ class TimesheetEntryResponse(BaseModel):
 
 class TimesheetEntryUpdate(BaseModel):
     entry_date: Optional[date] = None
-    project_id: Optional[int] = None
-    project_name: Optional[str] = None
-    task_id: Optional[int] = None
-    task_name: Optional[str] = None
+    project_uuid: Optional[UUID4] = None
+    task_uuid: Optional[UUID4] = None
     activity_description: Optional[str] = None
     hours_worked: Optional[Decimal] = None
     is_billable: Optional[bool] = None
-    client_id: Optional[int] = None
-    client_name: Optional[str] = None
+    client_uuid: Optional[UUID4] = None
     notes: Optional[str] = None
 class TargetedEntitySchema(BaseModel):
     uuid: UUID4

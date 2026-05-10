@@ -163,6 +163,30 @@ class ProjectListResponse(BaseModel):
     data: List[ProjectSchema] = []
     pagination: Optional[Any] = None
 
+class ProjectEmployeeViewSchema(BaseModel):
+    uuid: uuid.UUID
+    project_code: str
+    project_name: str
+    description: Optional[str] = None
+    project_type: ProjectType
+    status: ProjectStatus
+    priority: Optional[ProjectPriority] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    color_code: Optional[str] = None
+    tags: Optional[List[str]] = None
+    client_name: Optional[str] = None
+    project_manager_name: Optional[str] = None
+    role: Optional[MemberRole] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ProjectEmployeeViewListResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[ProjectEmployeeViewSchema] = []
+    pagination: Optional[Any] = None
+
 
 # ============================================================
 # PROJECT TASK SCHEMAS
