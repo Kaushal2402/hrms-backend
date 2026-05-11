@@ -60,3 +60,11 @@ api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 api_router.include_router(activity_types.router, prefix="/activity-types", tags=["activity_types"])
 api_router.include_router(timesheet_policies.router, prefix="/timesheet-policies", tags=["timesheet_policies"])
 
+
+
+# ── Payroll Module (auto-generated 2026-05-12) ──────────
+from app.api.v1.endpoints import (
+    payroll_salary_components
+)
+
+api_router.include_router(payroll_salary_components.router, prefix="/payroll/salary-components", tags=["payroll"])

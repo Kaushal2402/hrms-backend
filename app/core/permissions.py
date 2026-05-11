@@ -280,3 +280,92 @@ class ActivityTypePermissions:
 # ---------------------------------------------------------------------------
 class TimesheetPolicyPermissions:
     MANAGE = "93"   # Create / update / delete timesheet policies
+
+
+# ---------------------------------------------------------------------------
+# PAYROLL MODULE  (101–140)
+# ---------------------------------------------------------------------------
+
+class PayrollSalaryComponentPermissions:
+    READ   = "101"
+    CREATE = "102"
+    UPDATE = "103"
+    DELETE = "104"
+
+
+class PayrollEmployeeSalaryPermissions:
+    READ   = "105"
+    CREATE = "106"
+    UPDATE = "107"
+    DELETE = "108"
+
+
+class PayrollPeriodPermissions:
+    READ    = "109"
+    CREATE  = "110"
+    UPDATE  = "111"
+    PROCESS = "112"
+
+
+class PayrollPayslipPermissions:
+    READ    = "113"
+    PUBLISH = "114"
+    REVERSE = "115"
+
+
+class PayrollLoanPermissions:
+    READ   = "116"
+    CREATE = "117"
+    APPROVE= "118"
+
+
+class PayrollReimbursementPermissions:
+    READ   = "119"
+    CREATE = "120"
+    APPROVE= "121"
+
+
+class PayrollTaxDeclarationPermissions:
+    READ   = "122"
+    CREATE = "123"
+    APPROVE= "124"
+
+
+class PayrollBankFilePermissions:
+    READ   = "125"
+    CREATE = "126"
+
+
+class PayrollAuditLogPermissions:
+    READ   = "127"
+
+
+class PayrollFinalSettlementPermissions:
+    READ   = "128"
+    CREATE = "129"
+    APPROVE= "130"
+
+
+class PayrollArrearPermissions:
+    READ   = "131"
+    CREATE = "132"
+    APPROVE= "133"
+
+
+class PayrollReportPermissions:
+    READ   = "134"
+
+
+class PayrollStatutoryFormPermissions:
+    READ   = "135"
+    CREATE = "136"
+
+
+class PayrollReconciliationPermissions:
+    READ   = "137"
+    CREATE = "138"
+
+
+class PayrollJournalEntryPermissions:
+    READ   = "139"
+    CREATE = "140"

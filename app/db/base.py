@@ -31,4 +31,14 @@ from app.models.projects import (
     ProjectClient, Project, ProjectTask, ProjectMember,
     ActivityType, TimesheetPolicy
 ) # noqa
-
+from app.models.payroll import (
+    SalaryComponent, SalaryTemplate, SalaryTemplateComponent,
+    EmployeeSalary, EmployeeSalaryComponent, PayrollPeriod,
+    Payslip, PayslipComponent, EmployeeLoan, LoanRepayment,
+    ReimbursementCategory, ReimbursementClaim, FinalSettlement,
+    Arrear, OneTimePayment, TaxDeclaration, TaxDeclarationItem,
+    TaxCalculation, BankFile, BankFileRecord, EmployeeBankAccount,
+    PayrollReconciliation, PayrollReconciliationIssue,
+    PayrollJournalEntry, PayrollJournalEntryLine, StatutoryForm,
+    PayrollAuditLog
+) # noqa
