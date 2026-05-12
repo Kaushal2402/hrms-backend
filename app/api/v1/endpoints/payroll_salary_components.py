@@ -37,6 +37,8 @@ def get_salary_components(
     search: Optional[str] = Query(None),
     component_type: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
+    sort_by: Optional[str] = Query("component_name"),
+    sort_order: Optional[str] = Query("asc"),
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
@@ -52,6 +54,16 @@ def get_salary_components(
     if search:
         search_term = f"%{search}%"
         query = query.filter(or_(SalaryComponent.component_name.ilike(search_term), SalaryComponent.component_code.ilike(search_term)))
+        
+    # Sorting
+    if sort_by and hasattr(SalaryComponent, sort_by):
+        col = getattr(SalaryComponent, sort_by)
+        if sort_order == "desc":
+            query = query.order_by(col.desc())
+        else:
+            query = query.order_by(col.asc())
+    else:
+        query = query.order_by(SalaryComponent.component_name.asc())
         
     total_records = query.count()
     total_pages = (total_records + limit - 1) // limit if total_records > 0 else 0

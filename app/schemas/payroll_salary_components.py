@@ -70,6 +70,7 @@ class SalaryComponentUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class SalaryComponentSchema(SalaryComponentBase):
+    id: int
     uuid: UUID4
     created_at: datetime
     updated_at: datetime
