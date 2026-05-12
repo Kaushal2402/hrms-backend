@@ -73,7 +73,7 @@ def get_templates(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, "101", "list")
+    _require_permission(db, current_user, PayrollSalaryComponentPermissions.READ, "list salary templates")
     org_id = _get_org_id(current_user)
     query = db.query(SalaryTemplate).filter(SalaryTemplate.organization_id == org_id)
     
@@ -113,7 +113,7 @@ def create_template(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, "102", "create")
+    _require_permission(db, current_user, PayrollSalaryComponentPermissions.CREATE, "create salary template")
     org_id = _get_org_id(current_user)
     if db.query(SalaryTemplate).filter(SalaryTemplate.organization_id == org_id, SalaryTemplate.template_code == item_in.template_code).first():
         raise HTTPException(400, "Code exists")
@@ -153,14 +153,14 @@ def create_template(
 
 @router.get("/{template_uuid}", response_model=SalaryTemplateDetailedResponse)
 def get_template(template_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
-    _require_permission(db, current_user, "101", "view")
+    _require_permission(db, current_user, PayrollSalaryComponentPermissions.READ, "view salary template")
     item = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == _get_org_id(current_user)).first()
     if not item: raise HTTPException(404, "Not found")
     return SalaryTemplateDetailedResponse(success=True, message="Salary template details retrieved successfully.", data=_enrich_template(db, item))
 
 @router.put("/{template_uuid}", response_model=SalaryTemplateResponse)
 def update_template(template_uuid: uuid.UUID, item_in: SalaryTemplateUpdate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
-    _require_permission(db, current_user, "103", "update")
+    _require_permission(db, current_user, PayrollSalaryComponentPermissions.UPDATE, "update salary template")
     org_id = _get_org_id(current_user)
     item = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == org_id).first()
     if not item: raise HTTPException(404, "Not found")
@@ -197,7 +197,7 @@ def update_template(template_uuid: uuid.UUID, item_in: SalaryTemplateUpdate, db:
 
 @router.delete("/{template_uuid}")
 def delete_template(template_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
-    _require_permission(db, current_user, "104", "delete")
+    _require_permission(db, current_user, PayrollSalaryComponentPermissions.DELETE, "delete salary template")
     item = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == _get_org_id(current_user)).first()
     if not item: raise HTTPException(404, "Not found")
     if db.query(EmployeeSalary).filter(EmployeeSalary.template_id == item.id).first(): raise HTTPException(400, "In use")
@@ -207,7 +207,7 @@ def delete_template(template_uuid: uuid.UUID, db: Session = Depends(deps.get_db)
 
 @router.post("/{template_uuid}/clone", response_model=SalaryTemplateResponse)
 def clone_template(template_uuid: uuid.UUID, clone_in: SalaryTemplateClone, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
-    _require_permission(db, current_user, "102", "clone")
+    _require_permission(db, current_user, PayrollSalaryComponentPermissions.CREATE, "clone salary template")
     org_id = _get_org_id(current_user)
     source = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == org_id).first()
     if not source: raise HTTPException(404, "Source not found")
@@ -275,7 +275,7 @@ def preview_salary(
 
 @router.post("/{template_uuid}/components", response_model=SalaryTemplateResponse)
 def update_components(template_uuid: uuid.UUID, comp_in: SalaryTemplateComponentUpdate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
-    _require_permission(db, current_user, "103", "update_components")
+    _require_permission(db, current_user, PayrollSalaryComponentPermissions.UPDATE, "update salary template components")
     org_id = _get_org_id(current_user)
     template = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == org_id).first()
     if not template: raise HTTPException(404, "Template not found")
@@ -307,7 +307,7 @@ def update_components(template_uuid: uuid.UUID, comp_in: SalaryTemplateComponent
 
 @router.get("/{template_uuid}/preview")
 def preview_template(template_uuid: uuid.UUID, annual_ctc: Decimal = Query(...), db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
-    _require_permission(db, current_user, "101", "preview")
+    _require_permission(db, current_user, PayrollSalaryComponentPermissions.READ, "preview salary template")
     org_id = _get_org_id(current_user)
     template = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == org_id).first()
     if not template: raise HTTPException(404, "Template not found")
