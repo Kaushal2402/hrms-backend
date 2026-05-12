@@ -1,0 +1,51 @@
+{
+  "verdict": "PASS",
+  "overall_score": 8.7,
+  "scores": {
+    "pattern_consistency": 10,
+    "multi_tenancy": 10,
+    "uuid_path_params": 10,
+    "pagination_correct": 10,
+    "schema_config": 9,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 7,
+    "rbac_enforced": 10,
+    "business_rules": 8,
+    "error_handling": 3
+  },
+  "issues": [
+    {
+      "severity": "MINOR",
+      "file": "payroll_salary_templates.py",
+      "line_hint": "class SalaryTemplateComponentUpdate",
+      "issue": "Update schema 'SalaryTemplateComponentUpdate' has non-Optional fields: ['components']",
+      "fix": "Make all fields Optional[...] in SalaryTemplateComponentUpdate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "payroll_salary_templates.py",
+      "line_hint": "create_template / update_template",
+      "issue": "Inconsistent HTTP status codes for business logic errors (e.g., 400 used for 'Code exists' and 'In use', but 404 for 'Not found').",
+      "fix": "Use 409 Conflict for 'Code exists' and 'In use' scenarios to better reflect RESTful standards."
+    },
+    {
+      "severity": "MAJOR",
+      "file": "payroll_salary_templates.py",
+      "line_hint": "update_template",
+      "issue": "The update logic uses `setattr` on the model instance without validating the state of the object or handling potential database constraints during the update.",
+      "fix": "Implement a more robust update pattern, potentially using a dictionary update or explicit field mapping to ensure data integrity."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Always use 409 Conflict for business logic violations (like duplicate codes or existing dependencies) instead of 400 Bad Request.",
+    "Ensure all update schemas have all fields marked as Optional, even if they are lists, to prevent validation errors on partial updates.",
+    "Consider using a service layer for complex business logic like cloning or default template toggling to keep the endpoint functions lean."
+  ],
+  "passed_checks": [
+    "Multi-tenancy enforced via organization_id filtering",
+    "Consistent use of UUID path parameters",
+    "Correct pagination implementation",
+    "Proper RBAC enforcement using helper functions",
+    "Correct usage of Pydantic model_dump and from_attributes"
+  ]
+}

@@ -176,6 +176,9 @@ class SalaryTemplate(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
     
+    # Relationships
+    components = relationship("SalaryTemplateComponent", cascade="all, delete-orphan")
+    
     __table_args__ = (
         Index('idx_sal_template_org_code', 'organization_id', 'template_code', unique=True),
     )

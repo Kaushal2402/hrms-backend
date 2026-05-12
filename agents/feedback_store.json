@@ -1,22 +1,26 @@
 {
   "common_mistakes": [
     {
-      "pattern": "Using .join(Model.relationship_name) when no relationship() is defined in the model — only FK columns exist",
+      "pattern": "Using .join(Model.relationship_name) when no relationship() is defined in the model \u2014 only FK columns exist",
       "count": 1,
-      "modules": ["salary_components"],
+      "modules": [
+        "salary_components"
+      ],
       "severity": "CRITICAL",
       "fix": "Always use explicit join: .join(TargetModel, SourceModel.fk_column == TargetModel.id) instead of .join(SourceModel.relationship_attr)"
     }
   ],
   "improvement_hints": [
-    "The payroll models do NOT define SQLAlchemy relationship() attributes. Always use explicit join syntax: .join(SalaryTemplate, SalaryTemplateComponent.template_id == SalaryTemplate.id) — never .join(SalaryTemplateComponent.template)",
+    "The payroll models do NOT define SQLAlchemy relationship() attributes. Always use explicit join syntax: .join(SalaryTemplate, SalaryTemplateComponent.template_id == SalaryTemplate.id) \u2014 never .join(SalaryTemplateComponent.template)",
     "Never assume ORM relationships exist. Check the model file first. If no relationship() is declared, use explicit join with FK columns."
   ],
   "module_scores": {
-    "salary_components": 9.2
+    "salary_components": 9.2,
+    "salary_templates": 8.7
   },
   "total_cycles_used": 1,
   "avg_cycles": {
-    "salary_components": 1
+    "salary_components": 1,
+    "salary_templates": 1
   }
 }
