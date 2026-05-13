@@ -8,19 +8,56 @@
       ],
       "severity": "CRITICAL",
       "fix": "Always use explicit join: .join(TargetModel, SourceModel.fk_column == TargetModel.id) instead of .join(SourceModel.relationship_attr)"
+    },
+    {
+      "pattern": "Update schema 'SalaryHoldUpdate' has non-Optional fields: ['hold_reason', 'hold_",
+      "count": 1,
+      "modules": [
+        "employee_salaries"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Business logic flaw: 'monthly_gross' and 'monthly_net' are hardcoded to old_sala",
+      "count": 1,
+      "modules": [
+        "employee_salaries"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing multi-tenancy check on 'emp' lookup. The employee lookup by UUID does no",
+      "count": 1,
+      "modules": [
+        "employee_salaries"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Inconsistent path parameter usage: uses UUID for employee, but other endpoints u",
+      "count": 1,
+      "modules": [
+        "employee_salaries"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
     "The payroll models do NOT define SQLAlchemy relationship() attributes. Always use explicit join syntax: .join(SalaryTemplate, SalaryTemplateComponent.template_id == SalaryTemplate.id) \u2014 never .join(SalaryTemplateComponent.template)",
-    "Never assume ORM relationships exist. Check the model file first. If no relationship() is declared, use explicit join with FK columns."
+    "Never assume ORM relationships exist. Check the model file first. If no relationship() is declared, use explicit join with FK columns.",
+    "Always validate that the resource being accessed (e.g., Employee) belongs to the authenticated organization, not just the salary record.",
+    "Avoid 'simplified' business logic in controllers; if calculations are complex, delegate to a service layer to keep the API layer clean.",
+    "Ensure all PATCH/UPDATE schemas strictly follow the 'Optional' pattern for all fields to allow partial updates."
   ],
   "module_scores": {
     "salary_components": 9.2,
-    "salary_templates": 8.7
+    "salary_templates": 8.7,
+    "employee_salaries": 8.9
   },
-  "total_cycles_used": 1,
+  "total_cycles_used": 2,
   "avg_cycles": {
     "salary_components": 1,
-    "salary_templates": 1
+    "salary_templates": 1,
+    "employee_salaries": 2
   }
 }

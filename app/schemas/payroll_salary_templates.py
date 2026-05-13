@@ -114,3 +114,14 @@ class SalaryTemplateComponentUpdate(BaseModel):
 
 class PreviewRequest(BaseModel):
     annual_ctc: Decimal
+
+class SalaryTemplateLookSchema(BaseModel):
+    uuid: UUID4
+    template_name: str
+    template_code: str
+
+    class Config:
+        from_attributes = True
+
+class SalaryTemplateLookResponse(PaginatedResponse[List[SalaryTemplateLookSchema]]):
+    pass

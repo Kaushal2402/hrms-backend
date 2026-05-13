@@ -279,6 +279,10 @@ class EmployeeSalary(Base):
         Index('idx_emp_sal_effective', 'employee_id', 'effective_from', 'effective_to'),
     )
 
+    # Relationships
+    employee = relationship("Employee", foreign_keys=[employee_id], backref="salaries")
+    salary_template = relationship("SalaryTemplate", foreign_keys=[template_id], backref="assigned_salaries")
+
 
 class EmployeeSalaryComponent(Base):
     """Individual salary components for employee"""

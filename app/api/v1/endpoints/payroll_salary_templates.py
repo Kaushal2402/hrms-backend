@@ -10,9 +10,9 @@ from app.models.organization import Organization
 from app.models.employee import Employee, Department, Location
 from app.models.payroll import SalaryTemplate, SalaryTemplateComponent, SalaryComponent, EmployeeSalary
 from app.schemas.payroll_salary_templates import (
-    SalaryTemplateCreate,    SalaryTemplateUpdate, SalaryTemplateSchema, SalaryTemplateDetailedSchema,
+    SalaryTemplateCreate, SalaryTemplateUpdate, SalaryTemplateSchema, SalaryTemplateDetailedSchema,
     SalaryTemplateResponse, SalaryTemplateDetailedResponse, SalaryTemplateListResponse, SalaryTemplateClone,
-    SalaryTemplateComponentUpdate, PreviewRequest
+    SalaryTemplateComponentUpdate, PreviewRequest, SalaryTemplateLookResponse
 )
 from app.core.permissions import PayrollSalaryComponentPermissions
 
@@ -105,6 +105,41 @@ def get_templates(
         message="Salary templates retrieved successfully.", 
         data=enriched_items, 
         pagination={'total_records': total_records, 'current_page': page, 'total_pages': (total_records + limit - 1) // limit, 'page_size': limit}
+    )
+
+@router.get("/lookup", response_model=SalaryTemplateLookResponse)
+def lookup_templates(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(True),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    # NO RBAC CHECK - Used for cross-module selection
+    org_id = _get_org_id(current_user)
+    query = db.query(SalaryTemplate).filter(SalaryTemplate.organization_id == org_id)
+    
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(
+            (SalaryTemplate.template_name.ilike(search_filter)) |
+            (SalaryTemplate.template_code.ilike(search_filter))
+        )
+
+    if is_active is not None: query = query.filter(SalaryTemplate.is_active == is_active)
+    
+    total = query.count()
+    items = query.with_entities(SalaryTemplate.uuid, SalaryTemplate.template_name, SalaryTemplate.template_code).offset((page - 1) * limit).limit(limit).all()
+    
+    # Map to dict for response
+    data = [{"uuid": i.uuid, "template_name": i.template_name, "template_code": i.template_code} for i in items]
+    
+    return SalaryTemplateLookResponse(
+        success=True,
+        message="Salary templates lookup retrieved successfully.",
+        data=data,
+        pagination={'total_records': total, 'current_page': page, 'total_pages': (total + limit - 1) // limit, 'page_size': limit}
     )
 
 @router.post("/", response_model=SalaryTemplateResponse)

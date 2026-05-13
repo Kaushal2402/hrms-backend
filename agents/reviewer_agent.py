@@ -155,6 +155,17 @@ def static_checks(schema_code: str, endpoint_code: str, module: str) -> list[dic
             "fix": "Add _require_permission(db, current_user, PERMISSION_CODE, 'action') at start of each function"
         })
 
+    # ── Descriptive Messages ───────────────────────────────────────────────
+    generic_messages = ["'Retrieved'", '"Retrieved"', "'Created'", '"Created"', "'Updated'", '"Updated"', "'Deleted'", '"Deleted"']
+    for msg in generic_messages:
+        if f"message={msg}" in endpoint_code or f'"message": {msg}' in endpoint_code or f"'message': {msg}" in endpoint_code:
+            issues.append({
+                "severity": "MINOR",
+                "file": f"payroll_{module}.py",
+                "issue": f"Generic response message found: {msg}",
+                "fix": f"Change {msg} to something descriptive like 'Salary {module} {msg.lower()} successfully'"
+            })
+
     return issues
 
 
@@ -201,6 +212,8 @@ REVIEW CHECKLIST — Score each item 0-10:
 8. rbac_enforced           — Every protected endpoint has permission check
 9. business_rules          — All module-specific business rules are correctly implemented
 10. error_handling         — Consistent HTTPException/JSONResponse pattern, correct status codes
+11. completeness           — Every endpoint from the provided API list is implemented. No missing functionality.
+12. advanced_listing       — List endpoints support search, multiple filters, and multi-column sorting.
 
 PASS THRESHOLD: overall average ≥ {PASS_THRESHOLD}/10
 
@@ -220,7 +233,9 @@ OUTPUT FORMAT: Respond with ONLY valid JSON (no markdown):
     "create_update_schema": <0-10>,
     "rbac_enforced": <0-10>,
     "business_rules": <0-10>,
-    "error_handling": <0-10>
+    "error_handling": <0-10>,
+    "completeness": <0-10>,
+    "advanced_listing": <0-10>
   }},
   "issues": [
     {{

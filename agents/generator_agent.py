@@ -15,6 +15,7 @@ import os
 import sys
 import argparse
 from pathlib import Path
+import re
 
 BASE_DIR = Path(__file__).parent.parent
 AGENTS_DIR = Path(__file__).parent
@@ -140,6 +141,14 @@ MANDATORY RULES (violation = automatic FAIL):
 8. EVERY protected endpoint MUST call `_require_permission()` or use `check_permission` dependency
 9. EVERY write operation MUST have: `db.add(item); db.commit(); db.refresh(item)`
 10. Background task endpoint MUST check `should_proceed_background: bool = Query(False)`
+11. ALL API response messages MUST be descriptive and relative to the entity (e.g., "Salary template created successfully" instead of "Created", "Employee salary records retrieved successfully" instead of "Retrieved").
+12. TOTAL COMPLETENESS: You MUST implement EVERY SINGLE ENDPOINT listed in the "API ENDPOINTS TO IMPLEMENT" section. Skipping any endpoint is a CRITICAL violation.
+13. LOGICAL INTEGRITY: Do not provide "hollow" implementations. You must implement the full business logic described in the rules.
+14. ADVANCED LISTING: EVERY list endpoint (GET /) MUST support:
+    (a) Global `search` query parameter (searches across name, code, and key string fields).
+    (b) Filtering on all relevant boolean and enum fields (is_active, status, type, etc.).
+    (c) Multi-column sorting: `sort_by` must accept comma-separated strings (e.g., "created_at,name") and apply them in sequence.
+15. OBJECT ENRICHMENT: Never return raw integer IDs for related entities. Always return a nested object (e.g., `employee`, `template`) containing `uuid`, `name`, and `code`.
 
 ═══════════════════════════════════════════════════════
 OUTPUT FORMAT — respond with EXACTLY this structure:
@@ -204,9 +213,6 @@ def parse_generated_output(raw: str) -> dict:
         result["agent_notes"] = notes_match.group(1).strip()
 
     return result
-
-
-import re
 
 
 def run_generator(
