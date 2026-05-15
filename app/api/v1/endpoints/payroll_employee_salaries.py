@@ -219,6 +219,104 @@ def release_salary(
     db.commit()
     return {"success": True, "message": "Employee salary hold released successfully", "data": salary}
 
+@router.get("/employees/{employee_uuid}/salary", response_model=EmployeeSalaryResponse)
+def get_current_salary(
+    employee_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    """
+    Get the currently active salary structure for a specific employee.
+    Used during salary revision to pre-populate current compensation details.
+    """
+    org_id = _get_org_id(current_user)
+    emp = db.query(Employee).filter(Employee.uuid == employee_uuid, Employee.organization_id == org_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Fetch the active salary record with enrichment
+    salary = db.query(EmployeeSalary).options(
+        joinedload(EmployeeSalary.employee),
+        joinedload(EmployeeSalary.salary_template),
+        joinedload(EmployeeSalary.bank_account)
+    ).filter(
+        EmployeeSalary.employee_id == emp.id, 
+        EmployeeSalary.organization_id == org_id,
+        EmployeeSalary.is_active == True
+    ).first()
+    
+    if not salary:
+        raise HTTPException(status_code=404, detail="No active salary record found for this employee")
+        
+    return {"success": True, "message": "Current salary retrieved successfully", "data": salary}
+
+@router.post("/employees/{employee_uuid}/salary-revision", response_model=EmployeeSalaryResponse)
+def create_salary_revision(
+    employee_uuid: uuid.UUID,
+    item_in: SalaryRevisionCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    """
+    Create a new salary revision for an employee.
+    Deactivates the existing salary and creates a new active one.
+    """
+    _require_permission(db, current_user, "107", "update")
+    org_id = _get_org_id(current_user)
+    
+    emp = db.query(Employee).filter(Employee.uuid == employee_uuid, Employee.organization_id == org_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    # Get current active salary
+    current_salary = db.query(EmployeeSalary).filter(
+        EmployeeSalary.employee_id == emp.id,
+        EmployeeSalary.is_active == True
+    ).first()
+    
+    # Resolve Related Entities (UUID -> ID)
+    template_id = None
+    if item_in.template_uuid:
+        tmpl = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == item_in.template_uuid, SalaryTemplate.organization_id == org_id).first()
+        if tmpl: template_id = tmpl.id
+        
+    bank_account_id = None
+    if item_in.bank_account_uuid:
+        from app.models.payroll import EmployeeBankAccount
+        bank = db.query(EmployeeBankAccount).filter(EmployeeBankAccount.uuid == item_in.bank_account_uuid, EmployeeBankAccount.employee_id == emp.id).first()
+        if bank: bank_account_id = bank.id
+
+    # Deactivate current
+    if current_salary:
+        current_salary.is_active = False
+        current_salary.effective_to = item_in.effective_from - timedelta(days=1)
+        
+    # Create new revision
+    new_salary = EmployeeSalary(
+        organization_id=org_id,
+        employee_id=emp.id,
+        template_id=template_id,
+        bank_account_id=bank_account_id,
+        annual_ctc=item_in.annual_ctc,
+        monthly_ctc=item_in.annual_ctc / 12,
+        monthly_gross=item_in.annual_ctc / 12, # Simplified for now
+        monthly_net=item_in.annual_ctc / 12,   # Simplified for now
+        pay_frequency=item_in.pay_frequency,
+        currency=item_in.currency,
+        payment_mode=item_in.payment_mode,
+        effective_from=item_in.effective_from,
+        revision_reason=item_in.revision_reason,
+        previous_salary_id=current_salary.id if current_salary else None,
+        revision_number=(current_salary.revision_number + 1) if current_salary else 1,
+        is_active=True
+    )
+    
+    db.add(new_salary)
+    db.commit()
+    db.refresh(new_salary)
+    
+    return {"success": True, "message": "Salary revision created successfully", "data": new_salary}
+
 @router.get("/employees/{employee_uuid}/ctc-breakdown", response_model=CTCBreakdownResponse)
 def get_ctc_breakdown(
     employee_uuid: uuid.UUID,

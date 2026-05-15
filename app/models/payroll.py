@@ -282,6 +282,7 @@ class EmployeeSalary(Base):
     # Relationships
     employee = relationship("Employee", foreign_keys=[employee_id], backref="salaries")
     salary_template = relationship("SalaryTemplate", foreign_keys=[template_id], backref="assigned_salaries")
+    bank_account = relationship("EmployeeBankAccount", foreign_keys=[bank_account_id])
 
 
 class EmployeeSalaryComponent(Base):

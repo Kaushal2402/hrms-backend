@@ -40,6 +40,54 @@
         "employee_salaries"
       ],
       "severity": "MINOR"
+    },
+    {
+      "pattern": "Create schema 'EmployeeBankAccountCreate' contains 'uuid:' which should not be i",
+      "count": 1,
+      "modules": [
+        "bank_accounts"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "RBAC is defined in a helper function '_require_permission' but never actually ca",
+      "count": 1,
+      "modules": [
+        "bank_accounts"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing business logic to handle 'is_primary' constraint. If a new account is se",
+      "count": 1,
+      "modules": [
+        "bank_accounts"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing date range filtering implementation despite query parameters being defin",
+      "count": 1,
+      "modules": [
+        "audit_logs"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Exporting all records without pagination or date filtering can lead to memory ex",
+      "count": 1,
+      "modules": [
+        "audit_logs"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Advanced listing features (sorting) are missing.",
+      "count": 1,
+      "modules": [
+        "audit_logs"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
@@ -47,17 +95,27 @@
     "Never assume ORM relationships exist. Check the model file first. If no relationship() is declared, use explicit join with FK columns.",
     "Always validate that the resource being accessed (e.g., Employee) belongs to the authenticated organization, not just the salary record.",
     "Avoid 'simplified' business logic in controllers; if calculations are complex, delegate to a service layer to keep the API layer clean.",
-    "Ensure all PATCH/UPDATE schemas strictly follow the 'Optional' pattern for all fields to allow partial updates."
+    "Ensure all PATCH/UPDATE schemas strictly follow the 'Optional' pattern for all fields to allow partial updates.",
+    "Always verify that defined helper functions (like _require_permission) are actually invoked within the endpoint logic.",
+    "Consider the state implications of boolean flags like 'is_primary' in database records; they often require transactional cleanup of previous records.",
+    "Ensure that input schemas are strictly validated against the database model requirements.",
+    "Always implement the logic for all defined query parameters; unused parameters create technical debt.",
+    "For export endpoints in production, always consider streaming large datasets or enforcing a maximum record limit to prevent OOM errors.",
+    "Ensure that 'advanced_listing' requirements (sorting/filtering) are fully realized in the implementation, not just the schema."
   ],
   "module_scores": {
     "salary_components": 9.2,
     "salary_templates": 8.7,
-    "employee_salaries": 8.9
+    "employee_salaries": 8.9,
+    "bank_accounts": 8.8,
+    "audit_logs": 8.8
   },
-  "total_cycles_used": 2,
+  "total_cycles_used": 4,
   "avg_cycles": {
     "salary_components": 1,
     "salary_templates": 1,
-    "employee_salaries": 2
+    "employee_salaries": 2,
+    "bank_accounts": 2,
+    "audit_logs": 2
   }
 }

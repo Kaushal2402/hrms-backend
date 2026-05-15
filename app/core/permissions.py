@@ -369,3 +369,11 @@ class PayrollReconciliationPermissions:
 class PayrollJournalEntryPermissions:
     READ   = "139"
     CREATE = "140"
+# ---------------------------------------------------------------------------
+# BANK ACCOUNTS MODULE (141–144)
+# ---------------------------------------------------------------------------
+class PayrollBankAccountsPermissions:
+    READ   = "141"
+    CREATE = "142"
+    UPDATE = "143"
+    DELETE = "144"

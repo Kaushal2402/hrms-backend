@@ -29,6 +29,14 @@ class TemplateBriefSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class BankAccountBriefSchema(BaseModel):
+    uuid: UUID4
+    bank_name: str
+    account_number: str
+    
+    class Config:
+        from_attributes = True
+
 class EmployeeSalaryBase(BaseModel):
     annual_ctc: Decimal
     monthly_ctc: Decimal
@@ -57,7 +65,12 @@ class SalaryHoldUpdate(BaseModel):
     hold_from_date: Optional[date] = None
 
 class SalaryRevisionCreate(BaseModel):
-    new_annual_ctc: Decimal
+    annual_ctc: Decimal
+    template_uuid: Optional[UUID4] = None
+    bank_account_uuid: Optional[UUID4] = None
+    pay_frequency: Optional[PayFrequency] = PayFrequency.MONTHLY
+    currency: Optional[str] = "INR"
+    payment_mode: Optional[str] = "bank_transfer"
     revision_reason: str
     effective_from: date
 
@@ -67,6 +80,7 @@ class EmployeeSalarySchema(EmployeeSalaryBase):
     is_on_hold: bool
     employee: Optional[EmployeeBriefSchema] = None
     salary_template: Optional[TemplateBriefSchema] = None
+    bank_account: Optional[BankAccountBriefSchema] = None
     created_at: datetime
 
     class Config:

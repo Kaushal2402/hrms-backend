@@ -64,10 +64,13 @@ api_router.include_router(timesheet_policies.router, prefix="/timesheet-policies
 
 # ── Payroll Module (auto-generated 2026-05-12) ──────────
 from app.api.v1.endpoints import (
-    payroll_salary_components, payroll_salary_templates, payroll_employee_salaries
+    payroll_salary_components, payroll_salary_templates, payroll_employee_salaries,
+    payroll_bank_accounts, payroll_audit_logs
 )
 
 api_router.include_router(payroll_salary_components.router, prefix="/payroll/salary-components", tags=["payroll"])
 api_router.include_router(payroll_salary_templates.router, prefix="/payroll/salary-templates", tags=["payroll"])
 api_router.include_router(payroll_employee_salaries.router, prefix="/payroll/employee-salaries", tags=["payroll"])
+api_router.include_router(payroll_bank_accounts.router, prefix="/payroll/bank-accounts", tags=["payroll"])
+api_router.include_router(payroll_audit_logs.router, prefix="/payroll/audit-logs", tags=["payroll"])
 

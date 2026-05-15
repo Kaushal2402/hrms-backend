@@ -39,6 +39,15 @@ MAX_CYCLES = 3
 
 # ─────────────────────────────────────────────────────
 # Utility: extract API list section for a module
+
+# # Run ALL 18 payroll modules end-to-end
+# ./hrmenv/bin/python agents/orchestrator.py
+
+# Run just one module
+# ./hrmenv/bin/python agents/orchestrator.py --module salary_components
+
+# Force regenerate a module
+# ./hrmenv/bin/python agents/orchestrator.py --module salary_components --force
 # ─────────────────────────────────────────────────────
 
 MODULE_API_SECTIONS = {
