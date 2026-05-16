@@ -1,11 +1,12 @@
 import uuid
 from decimal import Decimal
 from typing import List, Optional, Union
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.api import deps
+from app.utils.payroll_audit import PayrollAuditService
 from app.models.organization import Organization
 from app.models.employee import Employee, Department, Location
 from app.models.payroll import SalaryTemplate, SalaryTemplateComponent, SalaryComponent, EmployeeSalary
@@ -145,6 +146,7 @@ def lookup_templates(
 @router.post("/", response_model=SalaryTemplateResponse)
 def create_template(
     item_in: SalaryTemplateCreate,
+    request: Request,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
@@ -184,6 +186,21 @@ def create_template(
     
     db.commit()
     db.refresh(template)
+    
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="template_created",
+        entity_type="salary_template",
+        entity_id=template.id,
+        after_state=PayrollAuditService.get_model_dict(template),
+        change_summary=f"Created salary template: {template.template_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    
     return SalaryTemplateResponse(success=True, message="Salary template created successfully.", data=_enrich_template(db, template))
 
 @router.get("/{template_uuid}", response_model=SalaryTemplateDetailedResponse)
@@ -194,12 +211,21 @@ def get_template(template_uuid: uuid.UUID, db: Session = Depends(deps.get_db), c
     return SalaryTemplateDetailedResponse(success=True, message="Salary template details retrieved successfully.", data=_enrich_template(db, item))
 
 @router.put("/{template_uuid}", response_model=SalaryTemplateResponse)
-def update_template(template_uuid: uuid.UUID, item_in: SalaryTemplateUpdate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+def update_template(
+    template_uuid: uuid.UUID, 
+    item_in: SalaryTemplateUpdate, 
+    request: Request,
+    db: Session = Depends(deps.get_db), 
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
     _require_permission(db, current_user, PayrollSalaryComponentPermissions.UPDATE, "update salary template")
     org_id = _get_org_id(current_user)
     item = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == org_id).first()
     if not item: raise HTTPException(404, "Not found")
     if item_in.is_default: db.query(SalaryTemplate).filter(SalaryTemplate.organization_id == org_id).update({"is_default": False})
+    
+    # Capture state before update
+    before_state = PayrollAuditService.get_model_dict(item)
     
     # Map UUIDs to IDs if provided
     update_data = item_in.model_dump(exclude_unset=True, exclude={'components', 'department_uuids', 'location_uuids', 'grade_uuids'})
@@ -228,20 +254,63 @@ def update_template(template_uuid: uuid.UUID, item_in: SalaryTemplateUpdate, db:
             
     db.commit()
     db.refresh(item)
+    
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="template_updated",
+        entity_type="salary_template",
+        entity_id=item.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(item),
+        change_summary=f"Updated salary template: {item.template_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    
     return SalaryTemplateResponse(success=True, message="Salary template updated successfully.", data=_enrich_template(db, item))
 
 @router.delete("/{template_uuid}")
-def delete_template(template_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+def delete_template(
+    template_uuid: uuid.UUID, 
+    request: Request,
+    db: Session = Depends(deps.get_db), 
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
     _require_permission(db, current_user, PayrollSalaryComponentPermissions.DELETE, "delete salary template")
     item = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == _get_org_id(current_user)).first()
     if not item: raise HTTPException(404, "Not found")
     if db.query(EmployeeSalary).filter(EmployeeSalary.template_id == item.id).first(): raise HTTPException(400, "In use")
+    
+    before_state = PayrollAuditService.get_model_dict(item)
     db.delete(item)
+    
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="template_deleted",
+        entity_type="salary_template",
+        entity_id=item.id,
+        before_state=before_state,
+        change_summary=f"Deleted salary template: {item.template_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
     db.commit()
+    
     return {"success": True, "message": "Salary template deleted successfully."}
 
 @router.post("/{template_uuid}/clone", response_model=SalaryTemplateResponse)
-def clone_template(template_uuid: uuid.UUID, clone_in: SalaryTemplateClone, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+def clone_template(
+    template_uuid: uuid.UUID, 
+    clone_in: SalaryTemplateClone, 
+    request: Request,
+    db: Session = Depends(deps.get_db), 
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
     _require_permission(db, current_user, PayrollSalaryComponentPermissions.CREATE, "clone salary template")
     org_id = _get_org_id(current_user)
     source = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == org_id).first()
@@ -283,6 +352,21 @@ def clone_template(template_uuid: uuid.UUID, clone_in: SalaryTemplateClone, db: 
         
     db.commit()
     db.refresh(new_template)
+    
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="template_cloned",
+        entity_type="salary_template",
+        entity_id=new_template.id,
+        after_state=PayrollAuditService.get_model_dict(new_template),
+        change_summary=f"Cloned salary template from {source.template_name} to {new_template.template_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    
     return SalaryTemplateResponse(success=True, message="Salary template cloned successfully.", data=_enrich_template(db, new_template))
 
 @router.post("/preview", response_model=dict)
@@ -309,11 +393,20 @@ def preview_salary(
     }
 
 @router.post("/{template_uuid}/components", response_model=SalaryTemplateResponse)
-def update_components(template_uuid: uuid.UUID, comp_in: SalaryTemplateComponentUpdate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+def update_components(
+    template_uuid: uuid.UUID, 
+    comp_in: SalaryTemplateComponentUpdate, 
+    request: Request,
+    db: Session = Depends(deps.get_db), 
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
     _require_permission(db, current_user, PayrollSalaryComponentPermissions.UPDATE, "update salary template components")
     org_id = _get_org_id(current_user)
     template = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == template_uuid, SalaryTemplate.organization_id == org_id).first()
     if not template: raise HTTPException(404, "Template not found")
+    
+    # Capture state before update
+    before_state = PayrollAuditService.get_model_dict(template)
     
     # Remove existing components
     db.query(SalaryTemplateComponent).filter(SalaryTemplateComponent.template_id == template.id).delete()
@@ -338,7 +431,22 @@ def update_components(template_uuid: uuid.UUID, comp_in: SalaryTemplateComponent
     
     db.commit()
     db.refresh(template)
-    return SalaryTemplateResponse(success=True, message="Salary template components updated successfully.", data=template)
+    
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="template_components_updated",
+        entity_type="salary_template",
+        entity_id=template.id,
+        before_state=before_state,
+        change_summary=f"Updated components for salary template: {template.template_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    
+    return SalaryTemplateResponse(success=True, message="Salary template components updated successfully.", data=_enrich_template(db, template))
 
 @router.get("/{template_uuid}/preview")
 def preview_template(template_uuid: uuid.UUID, annual_ctc: Decimal = Query(...), db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):

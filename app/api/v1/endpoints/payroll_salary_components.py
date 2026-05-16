@@ -1,10 +1,11 @@
 import uuid
 from typing import List, Optional, Union
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.api import deps
+from app.utils.payroll_audit import PayrollAuditService
 from app.models.organization import Organization
 from app.models.employee import Employee
 from app.models.payroll import SalaryComponent, SalaryTemplateComponent, SalaryTemplate
@@ -78,6 +79,7 @@ def get_salary_components(
 @router.post("/", response_model=SalaryComponentResponse)
 def create_salary_component(
     item_in: SalaryComponentCreate,
+    request: Request,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
@@ -92,6 +94,21 @@ def create_salary_component(
     db.add(item)
     db.commit()
     db.refresh(item)
+    
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="component_created",
+        entity_type="salary_component",
+        entity_id=item.id,
+        after_state=PayrollAuditService.get_model_dict(item),
+        change_summary=f"Created salary component: {item.component_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    
     return {"success": True, "message": "Salary component created successfully", "data": SalaryComponentSchema.model_validate(item)}
 
 @router.get("/{component_uuid}", response_model=SalaryComponentResponse)
@@ -111,6 +128,7 @@ def get_salary_component(
 def update_salary_component(
     component_uuid: uuid.UUID,
     item_in: SalaryComponentUpdate,
+    request: Request,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
@@ -124,15 +142,35 @@ def update_salary_component(
         if db.query(SalaryTemplateComponent).filter(SalaryTemplateComponent.component_id == item.id).first():
             raise HTTPException(400, "Cannot change code of component used in templates")
             
+    # Capture state before update
+    before_state = PayrollAuditService.get_model_dict(item)
+    
     for field, value in item_in.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
     db.commit()
     db.refresh(item)
+    
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="component_updated",
+        entity_type="salary_component",
+        entity_id=item.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(item),
+        change_summary=f"Updated salary component: {item.component_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    
     return {"success": True, "message": "Salary component updated successfully", "data": SalaryComponentSchema.model_validate(item)}
 
 @router.delete("/{component_uuid}")
 def delete_salary_component(
     component_uuid: uuid.UUID,
+    request: Request,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
@@ -156,6 +194,23 @@ def delete_salary_component(
     if in_active_template:
         raise HTTPException(400, "Cannot deactivate component used in active templates")
         
+    before_state = PayrollAuditService.get_model_dict(item)
     item.is_active = False
     db.commit()
+    
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="component_deactivated",
+        entity_type="salary_component",
+        entity_id=item.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(item),
+        change_summary=f"Deactivated salary component: {item.component_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    
     return {"success": True, "message": "Salary component deactivated successfully"}

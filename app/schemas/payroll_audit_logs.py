@@ -15,7 +15,7 @@ class PayrollAuditLogSchema(BaseModel):
     after_state: Optional[dict] = None
     changed_fields: Optional[dict] = None
     change_summary: Optional[str] = None
-    performed_by: int
+    performed_by: Optional[int] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     risk_level: Optional[str] = None

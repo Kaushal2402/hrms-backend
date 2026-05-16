@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -23,22 +23,40 @@ router = APIRouter()
 
 @router.post("/login", response_model=Any)
 def login(
-    login_in: Login,
+    login_in: Optional[Login] = None,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(deps.get_db)
 ):
     """
     OAuth2 compatible token login, get an access token for future requests.
     Returns Access Token + User Data (Organization or Employee).
+    Supports both JSON payload (frontend) and Form Data (Swagger UI).
     """
+    email = None
+    password = None
+
+    # 1. Extract credentials
+    if login_in:
+        email = login_in.email
+        password = login_in.password
+    elif form_data:
+        email = form_data.username
+        password = form_data.password
+
+    if not email or not password:
+         raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email and password are required"
+        )
+
     # 1. Try to find in Organization
     user_type = "organization"
-    user_obj = db.query(Organization).filter(Organization.email == login_in.email).first()
+    user_obj = db.query(Organization).filter(Organization.email == email).first()
     
     # 2. If not found in Org, try Employee (Work Email first, then Personal Email)
     if not user_obj:
         user_type = "employee"
         user_obj = db.query(Employee).filter(
-            (Employee.work_email == login_in.email) | (Employee.personal_email == login_in.email)
+            (Employee.work_email == email) | (Employee.personal_email == email)
         ).first()
 
     if not user_obj:
@@ -51,7 +69,7 @@ def login(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Password not set for this account"
         )
 
-    if not security.verify_password(login_in.password, user_obj.hashed_password):
+    if not security.verify_password(password, user_obj.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect email or password"
         )

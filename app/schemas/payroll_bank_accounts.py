@@ -3,9 +3,10 @@ from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 from app.schemas.department import PaginatedResponse
+from app.schemas.employee import EmployeeSummarySchema
 
 class EmployeeBankAccountBase(BaseModel):
-    employee_id: int
+    employee_uuid: UUID4
     bank_name: str
     branch_name: Optional[str] = None
     account_number: str
@@ -42,6 +43,7 @@ class EmployeeBankAccountUpdate(BaseModel):
 
 class EmployeeBankAccountSchema(EmployeeBankAccountBase):
     uuid: UUID4
+    employee: Optional[EmployeeSummarySchema] = None
     created_at: datetime
     updated_at: datetime
 
@@ -55,3 +57,15 @@ class EmployeeBankAccountResponse(BaseModel):
 
 class EmployeeBankAccountListResponse(PaginatedResponse[List[EmployeeBankAccountSchema]]):
     pass
+
+class EmployeeBankAccountLookupSchema(BaseModel):
+    uuid: UUID4
+    bank_name: str
+    account_number: str
+    employee_name: str
+    is_primary: bool
+
+class EmployeeBankAccountLookupResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[EmployeeBankAccountLookupSchema]

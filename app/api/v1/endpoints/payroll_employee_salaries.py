@@ -1,12 +1,13 @@
 import uuid
 from typing import List, Optional, Union
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, or_
 from datetime import date, timedelta
 from decimal import Decimal
 
 from app.api import deps
+from app.utils.payroll_audit import PayrollAuditService
 from app.models.organization import Organization
 from app.models.employee import Employee
 from app.models.payroll import EmployeeSalary, SalaryTemplate, SalaryComponent
@@ -30,7 +31,6 @@ def _apply_sorting(query, model, sort_by: str, sort_order: str):
     if not sort_by:
         return query.order_by(model.created_at.desc())
         
-    # Field mapping for friendly names/relationships
     MAPPING = {
         "employee": Employee.first_name,
         "salary_template": SalaryTemplate.template_name,
@@ -45,7 +45,6 @@ def _apply_sorting(query, model, sort_by: str, sort_order: str):
                 query = query.order_by(col.desc() if sort_order == "desc" else col.asc())
             elif hasattr(model, field):
                 col = getattr(model, field)
-                # Ensure it's an instrumented attribute (column), not a relationship
                 if hasattr(col, "asc"):
                     query = query.order_by(col.desc() if sort_order == "desc" else col.asc())
         return query
@@ -67,7 +66,6 @@ def get_employee_salaries(
     _require_permission(db, current_user, "105", "read")
     org_id = _get_org_id(current_user)
     
-    # Use joinedload to eager load related objects for enrichment
     query = db.query(EmployeeSalary).options(
         joinedload(EmployeeSalary.employee),
         joinedload(EmployeeSalary.salary_template)
@@ -141,6 +139,7 @@ def lookup_employee_salaries(
 @router.post("/", response_model=EmployeeSalaryResponse)
 def create_salary(
     item_in: EmployeeSalaryCreate,
+    request: Request,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
@@ -172,6 +171,22 @@ def create_salary(
     db.add(new_salary)
     db.commit()
     db.refresh(new_salary)
+
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="salary_assigned",
+        entity_type="employee_salary",
+        entity_id=new_salary.id,
+        employee_id=emp.id,
+        after_state=PayrollAuditService.get_model_dict(new_salary),
+        change_summary=f"Assigned salary to {emp.first_name} {emp.last_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+
     return {"success": True, "message": "Salary structure assigned to employee successfully", "data": new_salary}
 
 @router.get("/{salary_uuid}", response_model=EmployeeSalaryResponse)
@@ -192,31 +207,76 @@ def get_salary_detail(
 def hold_salary(
     salary_uuid: uuid.UUID,
     hold_in: SalaryHoldUpdate,
+    request: Request,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
     _require_permission(db, current_user, "107", "update")
     salary = db.query(EmployeeSalary).filter(EmployeeSalary.uuid == salary_uuid, EmployeeSalary.organization_id == _get_org_id(current_user)).first()
     if not salary or salary.is_on_hold: raise HTTPException(400, "Invalid request")
+    
+    before_state = PayrollAuditService.get_model_dict(salary)
+    
     salary.is_on_hold = True
     salary.hold_reason = hold_in.hold_reason
     salary.hold_from_date = hold_in.hold_from_date
     db.commit()
+    db.refresh(salary)
+
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="salary_on_hold",
+        entity_type="employee_salary",
+        entity_id=salary.id,
+        employee_id=salary.employee_id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(salary),
+        change_summary=f"Salary put on hold for {salary.employee.first_name}. Reason: {hold_in.hold_reason}",
+        risk_level="medium",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+
     return {"success": True, "message": "Employee salary has been put on hold successfully", "data": salary}
 
 @router.patch("/{salary_uuid}/release", response_model=EmployeeSalaryResponse)
 def release_salary(
     salary_uuid: uuid.UUID,
+    request: Request,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
     _require_permission(db, current_user, "107", "update")
     salary = db.query(EmployeeSalary).filter(EmployeeSalary.uuid == salary_uuid, EmployeeSalary.organization_id == _get_org_id(current_user)).first()
     if not salary or not salary.is_on_hold: raise HTTPException(400, "Salary is not on hold")
+    
+    before_state = PayrollAuditService.get_model_dict(salary)
+    
     salary.is_on_hold = False
     salary.hold_reason = None
     salary.hold_from_date = None
     db.commit()
+    db.refresh(salary)
+
+    # Audit Log
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="salary_released",
+        entity_type="employee_salary",
+        entity_id=salary.id,
+        employee_id=salary.employee_id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(salary),
+        change_summary=f"Salary released for {salary.employee.first_name}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+
     return {"success": True, "message": "Employee salary hold released successfully", "data": salary}
 
 @router.get("/employees/{employee_uuid}/salary", response_model=EmployeeSalaryResponse)
@@ -225,16 +285,11 @@ def get_current_salary(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    """
-    Get the currently active salary structure for a specific employee.
-    Used during salary revision to pre-populate current compensation details.
-    """
     org_id = _get_org_id(current_user)
     emp = db.query(Employee).filter(Employee.uuid == employee_uuid, Employee.organization_id == org_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
     
-    # Fetch the active salary record with enrichment
     salary = db.query(EmployeeSalary).options(
         joinedload(EmployeeSalary.employee),
         joinedload(EmployeeSalary.salary_template),
@@ -254,13 +309,10 @@ def get_current_salary(
 def create_salary_revision(
     employee_uuid: uuid.UUID,
     item_in: SalaryRevisionCreate,
+    request: Request,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    """
-    Create a new salary revision for an employee.
-    Deactivates the existing salary and creates a new active one.
-    """
     _require_permission(db, current_user, "107", "update")
     org_id = _get_org_id(current_user)
     
@@ -268,13 +320,11 @@ def create_salary_revision(
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
         
-    # Get current active salary
     current_salary = db.query(EmployeeSalary).filter(
         EmployeeSalary.employee_id == emp.id,
         EmployeeSalary.is_active == True
     ).first()
     
-    # Resolve Related Entities (UUID -> ID)
     template_id = None
     if item_in.template_uuid:
         tmpl = db.query(SalaryTemplate).filter(SalaryTemplate.uuid == item_in.template_uuid, SalaryTemplate.organization_id == org_id).first()
@@ -285,6 +335,9 @@ def create_salary_revision(
         from app.models.payroll import EmployeeBankAccount
         bank = db.query(EmployeeBankAccount).filter(EmployeeBankAccount.uuid == item_in.bank_account_uuid, EmployeeBankAccount.employee_id == emp.id).first()
         if bank: bank_account_id = bank.id
+
+    # Capture before state if revising existing
+    before_state = PayrollAuditService.get_model_dict(current_salary) if current_salary else None
 
     # Deactivate current
     if current_salary:
@@ -299,8 +352,8 @@ def create_salary_revision(
         bank_account_id=bank_account_id,
         annual_ctc=item_in.annual_ctc,
         monthly_ctc=item_in.annual_ctc / 12,
-        monthly_gross=item_in.annual_ctc / 12, # Simplified for now
-        monthly_net=item_in.annual_ctc / 12,   # Simplified for now
+        monthly_gross=item_in.annual_ctc / 12, 
+        monthly_net=item_in.annual_ctc / 12,   
         pay_frequency=item_in.pay_frequency,
         currency=item_in.currency,
         payment_mode=item_in.payment_mode,
@@ -314,6 +367,24 @@ def create_salary_revision(
     db.add(new_salary)
     db.commit()
     db.refresh(new_salary)
+
+    # Audit Log
+    action = "salary_revised" if current_salary else "salary_assigned"
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type=action,
+        entity_type="employee_salary",
+        entity_id=new_salary.id,
+        employee_id=emp.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(new_salary),
+        change_summary=f"Salary revision for {emp.first_name}. Reason: {item_in.revision_reason}",
+        risk_level="high",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
     
     return {"success": True, "message": "Salary revision created successfully", "data": new_salary}
 
@@ -330,7 +401,6 @@ def get_ctc_breakdown(
     salary = db.query(EmployeeSalary).filter(EmployeeSalary.employee_id == emp.id, EmployeeSalary.is_active == True).first()
     if not salary: raise HTTPException(404, "No active salary found")
     
-    # Mock breakdown logic (ideally should fetch components from db)
     breakdown = [
         {"component_name": "Basic Salary", "monthly": salary.monthly_ctc * Decimal("0.5"), "annual": salary.annual_ctc * Decimal("0.5")},
         {"component_name": "HRA", "monthly": salary.monthly_ctc * Decimal("0.2"), "annual": salary.annual_ctc * Decimal("0.2")},

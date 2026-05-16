@@ -88,6 +88,102 @@
         "audit_logs"
       ],
       "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'PayslipHoldUpdate' has non-Optional fields: ['hold_reason']",
+      "count": 2,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Update/Create schema 'PayslipReverseCreate' has non-Optional fields: ['reversal_",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The model attribute 'is_reversed' and 'reversal_reason' are being set, but they ",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing advanced filtering (e.g., date ranges) and sorting capabilities.",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The endpoint returns 'PayslipResponse' but the schema 'PayslipDetailSchema' (whi",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing import for 'func' from sqlalchemy.",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Unsafe dynamic sorting. 'sort_by' is passed directly to order_by, allowing SQL i",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Bulk email endpoint defined in schema but not implemented in the router.",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing 'from datetime import date' import.",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Missing state validation: The reversal logic does not check if the payslip is al",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The 'department_id' filter is defined in the function signature but is never app",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'PayslipReverseCreate' has non-Optional fields: ['reversal_reason'",
+      "count": 1,
+      "modules": [
+        "payslips"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
@@ -101,21 +197,33 @@
     "Ensure that input schemas are strictly validated against the database model requirements.",
     "Always implement the logic for all defined query parameters; unused parameters create technical debt.",
     "For export endpoints in production, always consider streaming large datasets or enforcing a maximum record limit to prevent OOM errors.",
-    "Ensure that 'advanced_listing' requirements (sorting/filtering) are fully realized in the implementation, not just the schema."
+    "Ensure that 'advanced_listing' requirements (sorting/filtering) are fully realized in the implementation, not just the schema.",
+    "Always use joinedload for nested relationships in detail endpoints to avoid N+1 query issues.",
+    "Ensure that Update/Patch schemas follow the pattern of making all fields optional to allow partial updates.",
+    "Implement robust sorting and date-range filtering for list endpoints to meet production requirements for HRM systems.",
+    "Always validate user-provided strings used in order_by clauses against a whitelist to prevent SQL injection.",
+    "Ensure all schemas defined in the schema file have corresponding endpoints in the router.",
+    "Double-check imports for all used SQLAlchemy functions (e.g., 'func').",
+    "Always ensure that every filter parameter defined in the FastAPI endpoint signature is actually implemented in the database query logic.",
+    "For state-changing operations (Hold/Reverse), always implement idempotent checks to prevent double-processing.",
+    "Follow the 'Update' pattern strictly: even if a field is required for the business logic, if it is an update operation, consider if the schema should allow partial updates or if the field should be explicitly validated."
   ],
   "module_scores": {
     "salary_components": 9.2,
     "salary_templates": 8.7,
     "employee_salaries": 8.9,
     "bank_accounts": 8.8,
-    "audit_logs": 8.8
+    "audit_logs": 8.8,
+    "payroll_periods": 8.8,
+    "payslips": 7.5
   },
-  "total_cycles_used": 4,
+  "total_cycles_used": 7,
   "avg_cycles": {
     "salary_components": 1,
     "salary_templates": 1,
     "employee_salaries": 2,
     "bank_accounts": 2,
-    "audit_logs": 2
+    "audit_logs": 2,
+    "payroll_periods": 1
   }
 }

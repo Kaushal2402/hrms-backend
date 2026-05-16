@@ -80,6 +80,7 @@ class EmployeeSalarySchema(EmployeeSalaryBase):
     is_on_hold: bool
     employee: Optional[EmployeeBriefSchema] = None
     salary_template: Optional[TemplateBriefSchema] = None
+    template: Optional[TemplateBriefSchema] = Field(None, validation_alias="salary_template", serialization_alias="template")
     bank_account: Optional[BankAccountBriefSchema] = None
     created_at: datetime
 

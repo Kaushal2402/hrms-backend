@@ -1,0 +1,60 @@
+{
+  "verdict": "FAIL",
+  "overall_score": 5.0,
+  "scores": {
+    "pattern_consistency": 8,
+    "multi_tenancy": 10,
+    "uuid_path_params": 10,
+    "pagination_correct": 9,
+    "schema_config": 10,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 7,
+    "rbac_enforced": 7,
+    "business_rules": 6,
+    "error_handling": 6,
+    "completeness": 5,
+    "advanced_listing": 5
+  },
+  "issues": [
+    {
+      "severity": "CRITICAL",
+      "file": "app/api/v1/endpoints/payroll_payslips.py",
+      "line_hint": "reverse_payslip",
+      "issue": "Missing import for 'func' from sqlalchemy.",
+      "fix": "Add 'from sqlalchemy import func' to the imports."
+    },
+    {
+      "severity": "MAJOR",
+      "file": "app/api/v1/endpoints/payroll_payslips.py",
+      "line_hint": "get_payslips",
+      "issue": "Unsafe dynamic sorting. 'sort_by' is passed directly to order_by, allowing SQL injection.",
+      "fix": "Validate 'sort_by' against a whitelist of allowed column names."
+    },
+    {
+      "severity": "MAJOR",
+      "file": "app/api/v1/endpoints/payroll_payslips.py",
+      "line_hint": "BulkEmailRequest",
+      "issue": "Bulk email endpoint defined in schema but not implemented in the router.",
+      "fix": "Implement the POST /{payslip_uuid}/send-email or /bulk-email endpoint."
+    },
+    {
+      "severity": "MINOR",
+      "file": "app/api/v1/endpoints/payroll_payslips.py",
+      "line_hint": "get_payslips",
+      "issue": "Missing 'from datetime import date' import.",
+      "fix": "Add 'from datetime import date' to imports."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Always validate user-provided strings used in order_by clauses against a whitelist to prevent SQL injection.",
+    "Ensure all schemas defined in the schema file have corresponding endpoints in the router.",
+    "Double-check imports for all used SQLAlchemy functions (e.g., 'func')."
+  ],
+  "passed_checks": [
+    "Multi-tenancy enforced via organization_id",
+    "RBAC helper function implemented",
+    "Joinedload used for performance",
+    "Correct use of Pydantic from_attributes",
+    "Consistent response envelope structure"
+  ]
+}

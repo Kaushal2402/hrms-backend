@@ -1237,6 +1237,13 @@ class EmployeeBankAccount(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Relationships
+    employee = relationship("Employee", foreign_keys=[employee_id], backref="bank_accounts")
+
+    @property
+    def employee_uuid(self):
+        return self.employee.uuid if self.employee else None
+
 
 # ============================================================================
 # PAYROLL RECONCILIATION
@@ -1501,7 +1508,7 @@ class PayrollAuditLog(Base):
     change_summary = Column(Text, nullable=True)
     
     # User & Context
-    performed_by = Column(Integer, ForeignKey('employees.id'), nullable=False, index=True)
+    performed_by = Column(Integer, ForeignKey('employees.id'), nullable=True, index=True)
     ip_address = Column(String(50), nullable=True)
     user_agent = Column(Text, nullable=True)
     
