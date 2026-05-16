@@ -93,3 +93,44 @@ def send_set_password_email(email_to: str, token: str, first_name: str):
     </html>
     """
     send_email(email_to, subject, html_content)
+
+def send_payslip_email(email_to: str, employee_name: str, period_name: str, net_salary: float, payslip_number: str):
+    subject = f"Payslip for {period_name} - {payslip_number}"
+    html_content = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+            <div style="max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="color: #4f46e5; margin: 0;">Payslip Released</h2>
+                    <p style="color: #6b7280; font-size: 14px; margin: 5px 0 0 0;">HRMS Payroll Notification</p>
+                </div>
+                
+                <p>Hello <strong>{employee_name}</strong>,</p>
+                <p>Your payslip for the period <strong>{period_name}</strong> has been generated and is now available for viewing.</p>
+                
+                <div style="background-color: #f9fafb; padding: 20px; border-radius: 12px; margin: 25px 0; border: 1px solid #f3f4f6;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="color: #6b7280; font-size: 14px; padding: 5px 0;">Payslip Number:</td>
+                            <td style="text-align: right; font-weight: bold; padding: 5px 0;">{payslip_number}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #6b7280; font-size: 14px; padding: 5px 0;">Net Pay:</td>
+                            <td style="text-align: right; font-weight: bold; color: #059669; font-size: 18px; padding: 5px 0;">{net_salary}</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="http://127.0.0.1:3000/payroll/payslips" style="background-color: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">View Detailed Payslip</a>
+                </div>
+                
+                <p style="font-size: 13px; color: #4b5563;">You can view and download your full payslip by logging into the HRMS portal.</p>
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">This is an automated email from HRMS. Please do not reply directly to this message.</p>
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">© 2026 {settings.PROJECT_NAME}. All rights reserved.</p>
+            </div>
+        </body>
+    </html>
+    """
+    send_email(email_to, subject, html_content)

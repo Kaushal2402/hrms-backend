@@ -14,8 +14,13 @@ app = FastAPI(
 # Ensure upload directory exists
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
+# Ensure mock directory exists for development
+MOCK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "mock_files")
+os.makedirs(MOCK_DIR, exist_ok=True)
+
 # Mount Static Files
 app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
+app.mount("/mock", StaticFiles(directory=MOCK_DIR), name="mock")
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

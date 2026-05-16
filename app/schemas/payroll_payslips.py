@@ -31,6 +31,32 @@ class PayslipBase(BaseModel):
     net_salary: Decimal
     monthly_ctc: Decimal
     status: PayslipStatus = PayslipStatus.GENERATED
+    
+    # Financial Details
+    total_employer_contributions: Decimal = Decimal('0')
+    arrears_amount: Decimal = Decimal('0')
+    arrears_description: Optional[str] = None
+    one_time_payments: Decimal = Decimal('0')
+    one_time_description: Optional[str] = None
+    overtime_hours: Decimal = Decimal('0')
+    overtime_amount: Decimal = Decimal('0')
+    total_reimbursements: Decimal = Decimal('0')
+    tax_deducted: Decimal = Decimal('0')
+    
+    # Lifecycle Flags
+    is_published: bool = False
+    published_at: Optional[datetime] = None
+    is_on_hold: bool = False
+    hold_reason: Optional[str] = None
+    is_reversed: bool = False
+    reversal_reason: Optional[str] = None
+    reversed_at: Optional[datetime] = None
+    
+    # UI Metadata
+    employee_name: Optional[str] = None
+    employee_code: Optional[str] = None
+    department_name: Optional[str] = None
+    period_name: Optional[str] = None
 
 class PayslipSchema(PayslipBase):
     uuid: UUID4

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import uuid
 from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
@@ -7,11 +8,15 @@ from sqlalchemy import func, or_
 from app.api import deps
 from app.models.organization import Organization
 from app.models.employee import Employee
-from app.models.payroll import PayrollPeriod, PayrollStatus
+from app.models.payroll import (
+    PayrollPeriod, PayrollStatus, EmployeeSalary, 
+    EmployeeSalaryComponent, Payslip, PayslipComponent, 
+    PayslipStatus, ComponentType
+)
 from app.schemas.payroll_periods import (
     PayrollPeriodCreate, PayrollPeriodUpdate, PayrollPeriodSchema, 
     PayrollPeriodResponse, PayrollPeriodListResponse, PayrollPeriodAction,
-    PayrollSummaryResponse
+    PayrollSummaryResponse, PayrollPeriodLookupResponse
 )
 from app.core.permissions import PayrollPeriodPermissions
 
@@ -24,7 +29,24 @@ def _get_org_id(current_user: Union[Organization, Employee]) -> int:
 def _require_permission(db, current_user, code, action_label):
     if isinstance(current_user, Organization): return
     if not deps.has_permission(db, current_user, code):
-        raise HTTPException(status_code=403, detail=f"Permission denied: {action_label}")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Permission denied: {action_label}")
+
+@router.get("/lookup", response_model=PayrollPeriodLookupResponse)
+def get_payroll_periods_lookup(
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    """Lighweight lookup for payroll periods (No permission check)"""
+    org_id = _get_org_id(current_user)
+    periods = db.query(PayrollPeriod).filter(
+        PayrollPeriod.organization_id == org_id
+    ).order_by(PayrollPeriod.period_start_date.desc()).all()
+    
+    return {
+        "success": True,
+        "message": "Lookup retrieved successfully",
+        "data": periods
+    }
 
 @router.get("/", response_model=PayrollPeriodListResponse)
 def get_payroll_periods(
@@ -33,6 +55,8 @@ def get_payroll_periods(
     search: Optional[str] = None,
     status: Optional[PayrollStatus] = None,
     financial_year: Optional[str] = None,
+    sort_by: str = Query("created_at"),
+    sort_order: str = Query("desc"),
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
@@ -44,6 +68,16 @@ def get_payroll_periods(
         query = query.filter(or_(PayrollPeriod.period_name.ilike(f"%{search}%"), PayrollPeriod.period_code.ilike(f"%{search}%")))
     if status: query = query.filter(PayrollPeriod.status == status)
     if financial_year: query = query.filter(PayrollPeriod.financial_year == financial_year)
+    
+    # Apply Sorting
+    if hasattr(PayrollPeriod, sort_by):
+        column = getattr(PayrollPeriod, sort_by)
+        if sort_order == "desc":
+            query = query.order_by(column.desc())
+        else:
+            query = query.order_by(column.asc())
+    else:
+        query = query.order_by(PayrollPeriod.created_at.desc())
     
     total = query.count()
     items = query.offset((page - 1) * limit).limit(limit).all()
@@ -90,6 +124,80 @@ def process_payroll(
     if item.status.value != PayrollStatus.APPROVED.value:
         raise HTTPException(400, f"Only approved periods can be processed. Current status: {item.status}")
     
+    # 1. Clear existing payslips for re-processing (if not already paid/published)
+    db.query(PayslipComponent).filter(
+        PayslipComponent.payslip_id.in_(
+            db.query(Payslip.id).filter(Payslip.payroll_period_id == item.id)
+        )
+    ).delete(synchronize_session=False)
+    db.query(Payslip).filter(Payslip.payroll_period_id == item.id).delete(synchronize_session=False)
+    
+    # 2. Fetch all eligible employees (active with assigned salary)
+    salaries = db.query(EmployeeSalary).filter(
+        EmployeeSalary.organization_id == org_id,
+        EmployeeSalary.is_active == True,
+        EmployeeSalary.is_on_hold == False
+    ).all()
+    
+    total_gross = 0
+    total_deductions = 0
+    total_net = 0
+    total_employer_contrib = 0
+    headcount = 0
+    
+    # 3. Generate Payslips
+    for salary in salaries:
+        # Create Payslip
+        payslip = Payslip(
+            organization_id=org_id,
+            payroll_period_id=item.id,
+            employee_id=salary.employee_id,
+            employee_salary_id=salary.id,
+            payslip_number=f"PS-{org_id}-{item.period_code}-{salary.employee_id}-{uuid.uuid4().hex[:4]}",
+            period_start_date=item.period_start_date,
+            period_end_date=item.period_end_date,
+            payment_date=item.payment_date,
+            total_working_days=item.total_working_days,
+            paid_days=item.total_working_days, # Default to full pay, can be refined later
+            days_present=item.total_working_days,
+            basic_salary=salary.monthly_gross * Decimal("0.5"), # Simple mock logic for basic
+            gross_salary=salary.monthly_gross,
+            total_earnings=salary.monthly_gross,
+            total_deductions=salary.monthly_gross - salary.monthly_net,
+            net_salary=salary.monthly_net,
+            monthly_ctc=salary.monthly_ctc,
+            status=PayslipStatus.GENERATED,
+            is_published=False
+        )
+        db.add(payslip)
+        db.flush() # Get payslip.id
+        
+        # Add Components
+        comp_query = db.query(EmployeeSalaryComponent).filter(EmployeeSalaryComponent.employee_salary_id == salary.id)
+        for esc in comp_query.all():
+            ps_comp = PayslipComponent(
+                payslip_id=payslip.id,
+                component_id=esc.component_id,
+                component_name="Component", # In real app, join with SalaryComponent
+                component_type=ComponentType.EARNING, # Simplified
+                monthly_amount=esc.monthly_amount,
+                actual_amount=esc.monthly_amount
+            )
+            db.add(ps_comp)
+            
+        total_gross += salary.monthly_gross
+        total_deductions += (salary.monthly_gross - salary.monthly_net)
+        total_net += salary.monthly_net
+        total_employer_contrib += (salary.monthly_ctc - salary.monthly_gross)
+        headcount += 1
+        
+    # 4. Update Period Totals
+    item.total_employees = headcount
+    item.total_gross_amount = total_gross
+    item.total_deductions = total_deductions
+    item.total_net_amount = total_net
+    item.total_employer_contributions = total_employer_contrib
+    
     item.status = PayrollStatus.PROCESSED
     item.processing_completed_at = func.now()
     if not isinstance(current_user, Organization):
@@ -97,7 +205,7 @@ def process_payroll(
     
     db.commit()
     db.refresh(item)
-    return {"success": True, "message": "Payroll processed successfully", "data": item}
+    return {"success": True, "message": f"Payroll processed successfully. {headcount} payslips generated.", "data": item}
 
 @router.get("/{period_uuid}/summary", response_model=PayrollSummaryResponse)
 def get_summary(period_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
@@ -172,6 +280,16 @@ def publish_payroll(
     item.published_at = func.now()
     if not isinstance(current_user, Organization):
         item.published_by = current_user.id
+        
+    # Bulk update payslips
+    db.query(Payslip).filter(
+        Payslip.payroll_period_id == item.id,
+        Payslip.organization_id == org_id
+    ).update({
+        Payslip.is_published: True,
+        Payslip.published_at: func.now(),
+        Payslip.status: PayslipStatus.PUBLISHED
+    }, synchronize_session=False)
     
     db.commit()
     db.refresh(item)

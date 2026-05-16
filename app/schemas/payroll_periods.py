@@ -66,3 +66,15 @@ class PayrollSummaryResponse(BaseModel):
     success: bool
     message: str
     data: dict
+
+class PayrollPeriodLookup(BaseModel):
+    uuid: UUID4
+    period_name: str
+
+    class Config:
+        from_attributes = True
+
+class PayrollPeriodLookupResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[PayrollPeriodLookup]

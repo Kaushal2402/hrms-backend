@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request, Body
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -22,26 +21,36 @@ from app.utils.onboarding import get_onboarding_progress
 router = APIRouter()
 
 @router.post("/login", response_model=Any)
-def login(
-    login_in: Optional[Login] = None,
-    form_data: OAuth2PasswordRequestForm = Depends(),
+async def login(
+    request: Request,
     db: Session = Depends(deps.get_db)
 ):
     """
-    OAuth2 compatible token login, get an access token for future requests.
-    Returns Access Token + User Data (Organization or Employee).
+    OAuth2 compatible login, gets an access token for future requests.
     Supports both JSON payload (frontend) and Form Data (Swagger UI).
     """
     email = None
     password = None
 
-    # 1. Extract credentials
-    if login_in:
-        email = login_in.email
-        password = login_in.password
-    elif form_data:
-        email = form_data.username
-        password = form_data.password
+    # 1. Detect content type and extract credentials
+    content_type = request.headers.get("Content-Type", "")
+    
+    if "application/json" in content_type:
+        # Handle JSON (Frontend)
+        try:
+            data = await request.json()
+            email = data.get("email") or data.get("username")
+            password = data.get("password")
+        except:
+            pass
+    else:
+        # Handle Form Data (Swagger UI / curl -d)
+        try:
+            form = await request.form()
+            email = form.get("username") or form.get("email")
+            password = form.get("password")
+        except:
+            pass
 
     if not email or not password:
          raise HTTPException(

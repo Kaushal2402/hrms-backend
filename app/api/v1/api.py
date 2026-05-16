@@ -75,4 +75,5 @@ api_router.include_router(payroll_bank_accounts.router, prefix="/payroll/bank-ac
 api_router.include_router(payroll_audit_logs.router, prefix="/payroll/audit-logs", tags=["payroll"])
 api_router.include_router(payroll_periods.router, prefix="/payroll/periods", tags=["payroll"])
 api_router.include_router(payroll_payslips.router, prefix="/payroll/payslips", tags=["payroll"])
+api_router.include_router(payroll_payslips.employee_router, prefix="/payroll/employees", tags=["payroll"])
 
