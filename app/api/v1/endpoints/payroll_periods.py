@@ -76,14 +76,28 @@ def update_period(period_uuid: uuid.UUID, item_in: PayrollPeriodUpdate, db: Sess
     return {"success": True, "message": "Updated successfully", "data": item}
 
 @router.post("/{period_uuid}/process", response_model=PayrollPeriodResponse)
-def process_payroll(period_uuid: uuid.UUID, background_tasks: BackgroundTasks, should_proceed_background: bool = Query(False), db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+def process_payroll(
+    period_uuid: uuid.UUID, 
+    data: PayrollPeriodAction,
+    db: Session = Depends(deps.get_db), 
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "process")
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == _get_org_id(current_user)).first()
-    if not item or item.status not in [PayrollStatus.DRAFT, PayrollStatus.IN_PROGRESS]: raise HTTPException(400, "Invalid status for processing")
-    item.status = PayrollStatus.IN_PROGRESS
+    org_id = _get_org_id(current_user)
+    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not item: raise HTTPException(404, "Period not found")
+    
+    if item.status.value != PayrollStatus.APPROVED.value:
+        raise HTTPException(400, f"Only approved periods can be processed. Current status: {item.status}")
+    
+    item.status = PayrollStatus.PROCESSED
+    item.processing_completed_at = func.now()
+    if not isinstance(current_user, Organization):
+        item.processed_by = current_user.id
+    
     db.commit()
-    # Logic for processing would go here
-    return {"success": True, "message": "Processing initiated", "data": item}
+    db.refresh(item)
+    return {"success": True, "message": "Payroll processed successfully", "data": item}
 
 @router.get("/{period_uuid}/summary", response_model=PayrollSummaryResponse)
 def get_summary(period_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
@@ -103,7 +117,7 @@ def submit_for_approval(
     item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
     if not item: raise HTTPException(404, "Period not found")
     
-    if item.status not in [PayrollStatus.DRAFT, PayrollStatus.IN_PROGRESS]:
+    if item.status not in [PayrollStatus.DRAFT, PayrollStatus.IN_PROGRESS, PayrollStatus.ON_HOLD]:
         raise HTTPException(400, f"Cannot submit for approval from status: {item.status}")
     
     item.status = PayrollStatus.PENDING_APPROVAL
@@ -151,8 +165,8 @@ def publish_payroll(
     item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
     if not item: raise HTTPException(404, "Period not found")
     
-    if item.status != PayrollStatus.APPROVED:
-        raise HTTPException(400, "Only approved periods can be published")
+    if item.status.value != PayrollStatus.PROCESSED.value:
+        raise HTTPException(400, f"Only processed periods can be published. Current status: {item.status}")
     
     item.status = PayrollStatus.PUBLISHED
     item.published_at = func.now()
