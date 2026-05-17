@@ -184,6 +184,94 @@
         "payslips"
       ],
       "severity": "MINOR"
+    },
+    {
+      "pattern": "Insecure schedule generation: The loop uses a static date for all installments, ",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing multi-tenancy check on specific resource lookups (e.g., approve/disburse",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Advanced listing features (sorting, search) are missing.",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Create schema 'LoanCreate' contains 'uuid:' which should not be in input schemas",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Update schema 'LoanDisbursementUpdate' has non-Optional fields: ['disbursement_m",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Business logic flaw: The disbursement loop assumes principal_amount equals total",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Potential SQL injection/AttributeError: getattr(EmployeeLoan, sort_by) allows so",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Business logic for repayment schedule uses fixed 30-day intervals, which is inac",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing RBAC check for the 'disburse' endpoint.",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The 'advanced_listing' requirement is partially met; search functionality (e.g.,",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Potential race condition in loan_number generation using datetime string.",
+      "count": 1,
+      "modules": [
+        "loans"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
@@ -206,7 +294,16 @@
     "Double-check imports for all used SQLAlchemy functions (e.g., 'func').",
     "Always ensure that every filter parameter defined in the FastAPI endpoint signature is actually implemented in the database query logic.",
     "For state-changing operations (Hold/Reverse), always implement idempotent checks to prevent double-processing.",
-    "Follow the 'Update' pattern strictly: even if a field is required for the business logic, if it is an update operation, consider if the schema should allow partial updates or if the field should be explicitly validated."
+    "Follow the 'Update' pattern strictly: even if a field is required for the business logic, if it is an update operation, consider if the schema should allow partial updates or if the field should be explicitly validated.",
+    "Always verify that multi-tenancy filters are applied to every database query, even in state-transition endpoints.",
+    "When generating schedules, ensure date logic accounts for calendar progression (months/years).",
+    "Consider implementing a generic 'get_object_or_404' helper that includes organization_id filtering to reduce boilerplate and prevent security oversights.",
+    "Always validate that input schemas for 'Create' operations do not include system-generated fields like UUIDs or timestamps.",
+    "When implementing financial logic, ensure that interest and principal splits are explicitly calculated rather than assuming a flat monthly installment.",
+    "Use an allow-list for dynamic sorting to prevent users from querying internal model attributes.",
+    "Always verify that every state-changing endpoint has an associated RBAC check.",
+    "When dealing with financial schedules, avoid 'timedelta(days=30)' as it leads to 'date drift' over long periods.",
+    "Ensure that list endpoints include basic search capabilities (e.g., partial string matching) to satisfy 'advanced_listing' requirements."
   ],
   "module_scores": {
     "salary_components": 9.2,
@@ -215,9 +312,10 @@
     "bank_accounts": 8.8,
     "audit_logs": 8.8,
     "payroll_periods": 8.8,
-    "payslips": 7.5
+    "payslips": 7.5,
+    "loans": 5.0
   },
-  "total_cycles_used": 7,
+  "total_cycles_used": 10,
   "avg_cycles": {
     "salary_components": 1,
     "salary_templates": 1,

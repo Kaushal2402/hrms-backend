@@ -1,0 +1,61 @@
+{
+  "verdict": "FAIL",
+  "overall_score": 7.8,
+  "scores": {
+    "pattern_consistency": 9,
+    "multi_tenancy": 10,
+    "uuid_path_params": 10,
+    "pagination_correct": 10,
+    "schema_config": 10,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 5,
+    "rbac_enforced": 9,
+    "business_rules": 6,
+    "error_handling": 8,
+    "completeness": 10,
+    "advanced_listing": 7
+  },
+  "issues": [
+    {
+      "severity": "MAJOR",
+      "file": "app/schemas/payroll_loans.py",
+      "line_hint": "class LoanCreate",
+      "issue": "Create schema 'LoanCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from LoanCreate"
+    },
+    {
+      "severity": "MINOR",
+      "file": "app/schemas/payroll_loans.py",
+      "line_hint": "class LoanDisbursementUpdate",
+      "issue": "Update schema 'LoanDisbursementUpdate' has non-Optional fields: ['disbursement_mode', 'disbursement_reference']",
+      "fix": "Make all fields Optional[...] in LoanDisbursementUpdate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "app/api/v1/endpoints/payroll_loans.py",
+      "line_hint": "disburse_loan",
+      "issue": "Business logic flaw: The disbursement loop assumes principal_amount equals total_amount, ignoring interest_amount calculation.",
+      "fix": "Calculate interest_amount based on loan terms and split total_amount into principal and interest components."
+    },
+    {
+      "severity": "MINOR",
+      "file": "app/api/v1/endpoints/payroll_loans.py",
+      "line_hint": "get_loans",
+      "issue": "Potential SQL injection/AttributeError: getattr(EmployeeLoan, sort_by) allows sorting by any model attribute, including sensitive ones.",
+      "fix": "Implement an allow-list of sortable fields (e.g., ['created_at', 'loan_amount', 'loan_number'])."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Always validate that input schemas for 'Create' operations do not include system-generated fields like UUIDs or timestamps.",
+    "When implementing financial logic, ensure that interest and principal splits are explicitly calculated rather than assuming a flat monthly installment.",
+    "Use an allow-list for dynamic sorting to prevent users from querying internal model attributes."
+  ],
+  "passed_checks": [
+    "Multi-tenancy enforced via organization_id",
+    "RBAC implemented via helper",
+    "Pagination implemented correctly",
+    "State machine logic for loan status",
+    "Correct use of from_attributes",
+    "Consistent use of UUID path parameters"
+  ]
+}

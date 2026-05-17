@@ -619,6 +619,12 @@ class EmployeeLoan(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
     
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    
+    @property
+    def employee_uuid(self):
+        return self.employee.uuid if self.employee else None
+    
     __table_args__ = (
         Index('idx_loan_emp_status', 'employee_id', 'status'),
     )

@@ -170,7 +170,7 @@ OUTPUT FORMAT — respond with EXACTLY this structure:
     return prompt
 
 
-def call_gemini_api(prompt: str, model_name: str = "gemini-3.1-flash-lite") -> str:
+def call_gemini_api(prompt: str, model_name: str = "gemini-3.1-pro") -> str:
     """Call Google Gemini API."""
     try:
         import google.generativeai as genai
