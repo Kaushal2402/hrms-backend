@@ -190,6 +190,8 @@ def get_employee_loans(
     include_completed: bool = False,
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
+    sort_by: str = Query("created_at"),
+    order: str = Query("desc"),
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
@@ -226,7 +228,15 @@ def get_employee_loans(
         )
         
     total = query.count()
-    items = query.order_by(EmployeeLoan.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    
+    # Safe sorting
+    sort_col = getattr(EmployeeLoan, sort_by, EmployeeLoan.created_at)
+    if order.lower() == "asc":
+        query = query.order_by(sort_col.asc())
+    else:
+        query = query.order_by(sort_col.desc())
+        
+    items = query.offset((page - 1) * limit).limit(limit).all()
     
     return EmployeeLoanListResponse(
         success=True, 

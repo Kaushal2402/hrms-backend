@@ -272,6 +272,118 @@
         "loans"
       ],
       "severity": "MINOR"
+    },
+    {
+      "pattern": "Missing 'from_attributes = True' in ReimbursementClaimSchema, which will cause P",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The list endpoint lacks sorting, search, or date-range filtering, which are stan",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Race condition in claim number generation. Using datetime.now() is not guarantee",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing RBAC check on the submit_claim endpoint.",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Create schema 'ReimbursementClaimCreate' contains 'uuid:' which should not be in",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Update schema 'ReimbursementApproveUpdate' has non-Optional fields: ['approved_a",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'ReimbursementRejectUpdate' has non-Optional fields: ['rejection_r",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Race condition in claim number generation using `func.count`",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing sorting/ordering support in list endpoint",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing rejection endpoint implementation",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing multi-tenancy check on individual resource lookups.",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing existence check for claim object before accessing attributes.",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Pagination logic is incomplete.",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Use of datetime.utcnow() is deprecated in newer Python versions.",
+      "count": 1,
+      "modules": [
+        "reimbursements"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
@@ -303,7 +415,17 @@
     "Use an allow-list for dynamic sorting to prevent users from querying internal model attributes.",
     "Always verify that every state-changing endpoint has an associated RBAC check.",
     "When dealing with financial schedules, avoid 'timedelta(days=30)' as it leads to 'date drift' over long periods.",
-    "Ensure that list endpoints include basic search capabilities (e.g., partial string matching) to satisfy 'advanced_listing' requirements."
+    "Ensure that list endpoints include basic search capabilities (e.g., partial string matching) to satisfy 'advanced_listing' requirements.",
+    "Always verify that Pydantic schemas have 'from_attributes = True' when working with ORM models.",
+    "Implement standard filtering (date ranges, status, search) for all list endpoints to meet production requirements.",
+    "Avoid using datetime strings for unique identifiers; rely on database-level sequences or UUIDs.",
+    "Ensure consistent use of response models across all endpoints (e.g., submit_claim returns a generic dict instead of a schema).",
+    "Future generations should avoid using `db.query(func.count(...)).scalar()` for ID generation as it is not atomic and prone to race conditions.",
+    "Always ensure that Update schemas have all fields marked as Optional to allow partial updates (PATCH semantics).",
+    "List endpoints should always include sorting parameters (e.g., sort_by, order) to be production-ready.",
+    "Always verify that individual resource lookups (GET/PUT/POST by ID) include the organization_id filter to ensure strict data isolation.",
+    "Ensure that every database query result is validated for existence before attempting to modify attributes to avoid AttributeError.",
+    "Maintain consistency in pagination implementation across all list-type endpoints."
   ],
   "module_scores": {
     "salary_components": 9.2,
@@ -313,9 +435,10 @@
     "audit_logs": 8.8,
     "payroll_periods": 8.8,
     "payslips": 7.5,
-    "loans": 5.0
+    "loans": 5.0,
+    "reimbursements": 5.0
   },
-  "total_cycles_used": 10,
+  "total_cycles_used": 13,
   "avg_cycles": {
     "salary_components": 1,
     "salary_templates": 1,

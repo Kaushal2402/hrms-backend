@@ -762,6 +762,11 @@ class ReimbursementClaim(Base):
     # Notes
     notes = Column(Text, nullable=True)
     
+    # Relationships
+    category = relationship("ReimbursementCategory", foreign_keys=[category_id])
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    approver = relationship("Employee", foreign_keys=[approver_id])
+    
     # Audit
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

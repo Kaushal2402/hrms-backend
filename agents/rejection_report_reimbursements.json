@@ -1,0 +1,74 @@
+{
+  "verdict": "FAIL",
+  "overall_score": 5.0,
+  "scores": {
+    "pattern_consistency": 9,
+    "multi_tenancy": 10,
+    "uuid_path_params": 10,
+    "pagination_correct": 8,
+    "schema_config": 10,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 4,
+    "rbac_enforced": 7,
+    "business_rules": 5,
+    "error_handling": 6,
+    "completeness": 7,
+    "advanced_listing": 2
+  },
+  "issues": [
+    {
+      "severity": "MAJOR",
+      "file": "payroll_reimbursements.py",
+      "line_hint": "class ReimbursementClaimCreate",
+      "issue": "Create schema 'ReimbursementClaimCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from ReimbursementClaimCreate"
+    },
+    {
+      "severity": "MINOR",
+      "file": "payroll_reimbursements.py",
+      "line_hint": "class ReimbursementApproveUpdate",
+      "issue": "Update schema 'ReimbursementApproveUpdate' has non-Optional fields: ['approved_amount']",
+      "fix": "Make all fields Optional[...] in ReimbursementApproveUpdate"
+    },
+    {
+      "severity": "MINOR",
+      "file": "payroll_reimbursements.py",
+      "line_hint": "class ReimbursementRejectUpdate",
+      "issue": "Update schema 'ReimbursementRejectUpdate' has non-Optional fields: ['rejection_reason']",
+      "fix": "Make all fields Optional[...] in ReimbursementRejectUpdate"
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "payroll_reimbursements.py",
+      "line_hint": "create_claim",
+      "issue": "Race condition in claim number generation using `func.count`",
+      "fix": "Use a database sequence or a UUID-based claim number to ensure uniqueness in high-concurrency environments."
+    },
+    {
+      "severity": "MAJOR",
+      "file": "payroll_reimbursements.py",
+      "line_hint": "get_claims",
+      "issue": "Missing sorting/ordering support in list endpoint",
+      "fix": "Add `sort_by` and `order` query parameters to allow client-side sorting."
+    },
+    {
+      "severity": "MAJOR",
+      "file": "payroll_reimbursements.py",
+      "line_hint": "approve_claim",
+      "issue": "Missing rejection endpoint implementation",
+      "fix": "Implement the `reject_claim` endpoint using the `ReimbursementRejectUpdate` schema."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Future generations should avoid using `db.query(func.count(...)).scalar()` for ID generation as it is not atomic and prone to race conditions.",
+    "Always ensure that Update schemas have all fields marked as Optional to allow partial updates (PATCH semantics).",
+    "List endpoints should always include sorting parameters (e.g., sort_by, order) to be production-ready."
+  ],
+  "passed_checks": [
+    "Multi-tenancy enforced via organization_id",
+    "RBAC helper usage",
+    "Pydantic from_attributes configuration",
+    "Correct usage of UUID path parameters",
+    "Consistent response envelope structure"
+  ]
+}
