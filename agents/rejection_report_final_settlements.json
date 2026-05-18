@@ -1,0 +1,60 @@
+{
+  "verdict": "FAIL",
+  "overall_score": 7.5,
+  "scores": {
+    "pattern_consistency": 9,
+    "multi_tenancy": 10,
+    "uuid_path_params": 10,
+    "pagination_correct": 10,
+    "schema_config": 10,
+    "no_enum_redeclaration": 5,
+    "create_update_schema": 9,
+    "rbac_enforced": 9,
+    "business_rules": 4,
+    "error_handling": 8,
+    "completeness": 6,
+    "advanced_listing": 8
+  },
+  "issues": [
+    {
+      "severity": "MAJOR",
+      "file": "app/api/v1/endpoints/payroll_final_settlements.py",
+      "line_hint": "create_settlement",
+      "issue": "Business logic is hardcoded and lacks transactional integrity for complex payroll calculations.",
+      "fix": "Move calculation logic to a service layer or utility function to ensure atomicity and testability."
+    },
+    {
+      "severity": "MAJOR",
+      "file": "app/schemas/payroll_final_settlements.py",
+      "line_hint": "FinalSettlementSchema",
+      "issue": "Status field is a raw string instead of an Enum, risking data inconsistency.",
+      "fix": "Import the status Enum from the model and use it in the schema."
+    },
+    {
+      "severity": "MINOR",
+      "file": "app/api/v1/endpoints/payroll_final_settlements.py",
+      "line_hint": "create_settlement",
+      "issue": "Missing 'update' endpoint for settlements.",
+      "fix": "Implement a PUT/PATCH endpoint for updating settlement details before approval."
+    },
+    {
+      "severity": "MINOR",
+      "file": "app/api/v1/endpoints/payroll_final_settlements.py",
+      "line_hint": "create_settlement",
+      "issue": "Settlement number generation is prone to race conditions.",
+      "fix": "Use a database-level sequence or a locking mechanism when generating the settlement number."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Always define Enums in the model layer and reuse them in schemas to ensure type safety.",
+    "Avoid performing business logic directly in the route handler; delegate to a service layer.",
+    "Ensure that all CRUD operations (Update/Delete) are implemented if the schema provides the corresponding DTOs."
+  ],
+  "passed_checks": [
+    "Multi-tenancy enforced via organization_id",
+    "UUID path parameters used",
+    "Pagination implemented correctly",
+    "RBAC helper used consistently",
+    "Schema configuration (from_attributes) is correct"
+  ]
+}

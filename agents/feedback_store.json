@@ -384,6 +384,70 @@
         "reimbursements"
       ],
       "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'SettlementPaymentUpdate' has non-Optional fields: ['payment_mode'",
+      "count": 1,
+      "modules": [
+        "final_settlements"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Advanced listing requirements (sorting) are missing.",
+      "count": 1,
+      "modules": [
+        "final_settlements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Business logic for settlement calculation is missing.",
+      "count": 1,
+      "modules": [
+        "final_settlements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing multi-tenancy check on the approval endpoint.",
+      "count": 1,
+      "modules": [
+        "final_settlements"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Business logic is hardcoded and lacks transactional integrity for complex payrol",
+      "count": 1,
+      "modules": [
+        "final_settlements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Status field is a raw string instead of an Enum, risking data inconsistency.",
+      "count": 1,
+      "modules": [
+        "final_settlements"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing 'update' endpoint for settlements.",
+      "count": 1,
+      "modules": [
+        "final_settlements"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Settlement number generation is prone to race conditions.",
+      "count": 1,
+      "modules": [
+        "final_settlements"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
@@ -425,7 +489,13 @@
     "List endpoints should always include sorting parameters (e.g., sort_by, order) to be production-ready.",
     "Always verify that individual resource lookups (GET/PUT/POST by ID) include the organization_id filter to ensure strict data isolation.",
     "Ensure that every database query result is validated for existence before attempting to modify attributes to avoid AttributeError.",
-    "Maintain consistency in pagination implementation across all list-type endpoints."
+    "Maintain consistency in pagination implementation across all list-type endpoints.",
+    "Always implement sorting (order_by) in list endpoints as per the advanced_listing requirement.",
+    "Ensure that state-transition endpoints (approve/pay) also validate the organization_id to maintain strict data isolation.",
+    "Use Enums for status fields (e.g., 'draft', 'approved') instead of hardcoded strings to prevent typos and improve maintainability.",
+    "Always define Enums in the model layer and reuse them in schemas to ensure type safety.",
+    "Avoid performing business logic directly in the route handler; delegate to a service layer.",
+    "Ensure that all CRUD operations (Update/Delete) are implemented if the schema provides the corresponding DTOs."
   ],
   "module_scores": {
     "salary_components": 9.2,
@@ -436,15 +506,17 @@
     "payroll_periods": 8.8,
     "payslips": 7.5,
     "loans": 5.0,
-    "reimbursements": 5.0
+    "reimbursements": 5.0,
+    "final_settlements": 8.6
   },
-  "total_cycles_used": 13,
+  "total_cycles_used": 15,
   "avg_cycles": {
     "salary_components": 1,
     "salary_templates": 1,
     "employee_salaries": 2,
     "bank_accounts": 2,
     "audit_logs": 2,
-    "payroll_periods": 1
+    "payroll_periods": 1,
+    "final_settlements": 3
   }
 }

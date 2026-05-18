@@ -847,6 +847,7 @@ class FinalSettlement(Base):
     
     approved_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
     approved_at = Column(DateTime, nullable=True)
+    approval_comments = Column(Text, nullable=True)
     
     # Payment
     paid_at = Column(DateTime, nullable=True)
@@ -868,6 +869,14 @@ class FinalSettlement(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+    @property
+    def employee_uuid(self):
+        return self.employee.uuid if self.employee else None
+
+
 
 
 # ============================================================================
