@@ -448,6 +448,38 @@
         "final_settlements"
       ],
       "severity": "MINOR"
+    },
+    {
+      "pattern": "Incorrect usage of SQLAlchemy func.now() in string formatting",
+      "count": 1,
+      "modules": [
+        "arrears_one_time"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing date range filtering implementation",
+      "count": 1,
+      "modules": [
+        "arrears_one_time"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Status field is a raw string",
+      "count": 1,
+      "modules": [
+        "arrears_one_time"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Lack of sorting support",
+      "count": 1,
+      "modules": [
+        "arrears_one_time"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
@@ -495,7 +527,10 @@
     "Use Enums for status fields (e.g., 'draft', 'approved') instead of hardcoded strings to prevent typos and improve maintainability.",
     "Always define Enums in the model layer and reuse them in schemas to ensure type safety.",
     "Avoid performing business logic directly in the route handler; delegate to a service layer.",
-    "Ensure that all CRUD operations (Update/Delete) are implemented if the schema provides the corresponding DTOs."
+    "Ensure that all CRUD operations (Update/Delete) are implemented if the schema provides the corresponding DTOs.",
+    "Always verify that SQLAlchemy functions like `func.now()` are used in query filters, not for Python-side string interpolation.",
+    "Implement robust filtering and sorting for list endpoints to meet 'advanced_listing' requirements.",
+    "Use shared Enums from the models module to avoid magic strings in schemas and API logic."
   ],
   "module_scores": {
     "salary_components": 9.2,
@@ -507,9 +542,10 @@
     "payslips": 7.5,
     "loans": 5.0,
     "reimbursements": 5.0,
-    "final_settlements": 8.6
+    "final_settlements": 8.6,
+    "arrears_one_time": 8.8
   },
-  "total_cycles_used": 15,
+  "total_cycles_used": 16,
   "avg_cycles": {
     "salary_components": 1,
     "salary_templates": 1,
@@ -517,6 +553,7 @@
     "bank_accounts": 2,
     "audit_logs": 2,
     "payroll_periods": 1,
-    "final_settlements": 3
+    "final_settlements": 3,
+    "arrears_one_time": 2
   }
 }

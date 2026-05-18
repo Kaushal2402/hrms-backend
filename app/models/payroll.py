@@ -926,6 +926,8 @@ class Arrear(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
 
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
 
 class OneTimePayment(Base):
     """One-time payments (bonus, incentive, award)"""
@@ -940,33 +942,35 @@ class OneTimePayment(Base):
     payment_number = Column(String(50), nullable=False, unique=True)
     payment_type = Column(String(50), nullable=False)
     # 'bonus', 'incentive', 'award', 'gift', 'performance_bonus', 'referral_bonus'
-    
+
     payment_name = Column(String(150), nullable=False)
-    
+
     # Amount
     payment_amount = Column(Numeric(12, 2), nullable=False)
-    
+
     # Tax
     is_taxable = Column(Boolean, default=True)
     tax_deducted = Column(Numeric(10, 2), default=0)
-    
+
     # Details
     description = Column(Text, nullable=True)
     payment_reason = Column(Text, nullable=True)
-    
+
     # Approval
     status = Column(String(20), default='pending', nullable=False, index=True)
     approved_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
     approved_at = Column(DateTime, nullable=True)
-    
+
     # Payment
     payslip_id = Column(Integer, ForeignKey('payslips.id'), nullable=True)
     payroll_period_id = Column(Integer, ForeignKey('payroll_periods.id'), nullable=True)
     paid_at = Column(DateTime, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
 
 
 # ============================================================================

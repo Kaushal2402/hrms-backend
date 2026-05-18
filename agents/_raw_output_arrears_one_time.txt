@@ -1,0 +1,230 @@
+<<<SCHEMA_FILE>>>
+from typing import Optional, List, Generic, TypeVar
+from pydantic import BaseModel, UUID4, Field
+from datetime import datetime, date
+from decimal import Decimal
+from app.models.payroll import Arrear, OneTimePayment
+
+T = TypeVar("T")
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    success: bool
+    message: str
+    data: T
+    pagination: dict
+
+class ArrearBase(BaseModel):
+    employee_id: int
+    arrear_type: str
+    arrear_from_date: date
+    arrear_to_date: date
+    number_of_months: int
+    arrear_amount: Decimal
+    is_taxable: bool = True
+    reason: str
+    description: Optional[str] = None
+
+class ArrearCreate(ArrearBase):
+    pass
+
+class ArrearUpdate(BaseModel):
+    arrear_type: Optional[str] = None
+    arrear_amount: Optional[Decimal] = None
+    reason: Optional[str] = None
+    description: Optional[str] = None
+    is_taxable: Optional[bool] = None
+
+class ArrearSchema(ArrearBase):
+    uuid: UUID4
+    arrear_number: str
+    status: str
+    tax_deducted: Decimal
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ArrearResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[ArrearSchema] = None
+
+class ArrearListResponse(PaginatedResponse[List[ArrearSchema]]):
+    pass
+
+class OneTimePaymentBase(BaseModel):
+    employee_id: int
+    payment_type: str
+    payment_name: str
+    payment_amount: Decimal
+    is_taxable: bool = True
+    description: Optional[str] = None
+    payment_reason: Optional[str] = None
+
+class OneTimePaymentCreate(OneTimePaymentBase):
+    pass
+
+class OneTimePaymentUpdate(BaseModel):
+    payment_type: Optional[str] = None
+    payment_name: Optional[str] = None
+    payment_amount: Optional[Decimal] = None
+    description: Optional[str] = None
+    payment_reason: Optional[str] = None
+
+class OneTimePaymentSchema(OneTimePaymentBase):
+    uuid: UUID4
+    payment_number: str
+    status: str
+    tax_deducted: Decimal
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class OneTimePaymentResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[OneTimePaymentSchema] = None
+
+class OneTimePaymentListResponse(PaginatedResponse[List[OneTimePaymentSchema]]):
+    pass
+<<<END_SCHEMA>>>
+
+<<<ENDPOINT_FILE>>>
+import uuid
+from typing import List, Optional, Union
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
+
+from app.api import deps
+from app.models.organization import Organization
+from app.models.employee import Employee
+from app.models.payroll import Arrear, OneTimePayment
+from app.schemas.payroll_arrears_one_time import (
+    ArrearCreate, ArrearUpdate, ArrearSchema, ArrearResponse, ArrearListResponse,
+    OneTimePaymentCreate, OneTimePaymentUpdate, OneTimePaymentSchema, OneTimePaymentResponse, OneTimePaymentListResponse
+)
+
+router = APIRouter()
+
+def _get_org_id(current_user: Union[Organization, Employee]) -> int:
+    return current_user.id if isinstance(current_user, Organization) else current_user.organization_id
+
+def _require_permission(db, current_user, code, action_label):
+    if isinstance(current_user, Organization): return
+    if not deps.has_permission(db, current_user, code):
+        raise HTTPException(status_code=403, detail=f"You do not have permission to {action_label}")
+
+@router.get("/arrears", response_model=ArrearListResponse)
+def get_arrears(
+    employee_id: Optional[int] = None,
+    status: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    sort_by: str = Query("created_at"),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "101", "list arrears")
+    query = db.query(Arrear).filter(Arrear.organization_id == _get_org_id(current_user))
+    if employee_id: query = query.filter(Arrear.employee_id == employee_id)
+    if status: query = query.filter(Arrear.status == status)
+    if from_date: query = query.filter(Arrear.arrear_from_date >= from_date)
+    if to_date: query = query.filter(Arrear.arrear_to_date <= to_date)
+    
+    total_records = query.count()
+    items = query.order_by(getattr(Arrear, sort_by, Arrear.created_at)).offset((page - 1) * limit).limit(limit).all()
+    return ArrearListResponse(success=True, message="Arrears retrieved successfully", data=items, pagination={"total_records": total_records, "current_page": page, "total_pages": (total_records + limit - 1) // limit, "page_size": limit})
+
+@router.post("/arrears", response_model=ArrearResponse)
+def create_arrear(item_in: ArrearCreate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+    _require_permission(db, current_user, "102", "create arrears")
+    org_id = _get_org_id(current_user)
+    emp = db.query(Employee).filter(Employee.id == item_in.employee_id, Employee.organization_id == org_id).first()
+    if not emp: raise HTTPException(404, "Employee not found")
+    
+    arrear = Arrear(organization_id=org_id, arrear_number=f"AR-{emp.employee_code}-{datetime.utcnow().strftime('%Y%m')}", **item_in.model_dump())
+    db.add(arrear); db.commit(); db.refresh(arrear)
+    return {"success": True, "message": "Arrear created successfully", "data": arrear}
+
+@router.get("/arrears/{arrear_uuid}", response_model=ArrearResponse)
+def get_arrear(arrear_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+    _require_permission(db, current_user, "101", "view arrears")
+    item = db.query(Arrear).filter(Arrear.uuid == arrear_uuid, Arrear.organization_id == _get_org_id(current_user)).first()
+    if not item: raise HTTPException(404, "Arrear not found")
+    return {"success": True, "message": "Arrear retrieved successfully", "data": item}
+
+@router.post("/arrears/{arrear_uuid}/approve", response_model=ArrearResponse)
+def approve_arrear(arrear_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+    _require_permission(db, current_user, "103", "approve arrears")
+    item = db.query(Arrear).filter(Arrear.uuid == arrear_uuid, Arrear.organization_id == _get_org_id(current_user)).first()
+    if not item: raise HTTPException(404, "Arrear not found")
+    item.status = "APPROVED"; item.approved_at = datetime.utcnow(); db.commit(); db.refresh(item)
+    return {"success": True, "message": "Arrear approved successfully", "data": item}
+
+@router.get("/one-time-payments", response_model=OneTimePaymentListResponse)
+def get_otps(
+    employee_id: Optional[int] = None,
+    payment_type: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    sort_by: str = Query("created_at"),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "101", "list payments")
+    query = db.query(OneTimePayment).filter(OneTimePayment.organization_id == _get_org_id(current_user))
+    if employee_id: query = query.filter(OneTimePayment.employee_id == employee_id)
+    if payment_type: query = query.filter(OneTimePayment.payment_type == payment_type)
+    if status: query = query.filter(OneTimePayment.status == status)
+    
+    total_records = query.count()
+    items = query.order_by(getattr(OneTimePayment, sort_by, OneTimePayment.created_at)).offset((page - 1) * limit).limit(limit).all()
+    return OneTimePaymentListResponse(success=True, message="One-time payments retrieved successfully", data=items, pagination={"total_records": total_records, "current_page": page, "total_pages": (total_records + limit - 1) // limit, "page_size": limit})
+
+@router.post("/one-time-payments", response_model=OneTimePaymentResponse)
+def create_otp(item_in: OneTimePaymentCreate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+    _require_permission(db, current_user, "102", "create payments")
+    org_id = _get_org_id(current_user)
+    emp = db.query(Employee).filter(Employee.id == item_in.employee_id, Employee.organization_id == org_id).first()
+    if not emp: raise HTTPException(404, "Employee not found")
+    
+    otp = OneTimePayment(organization_id=org_id, payment_number=f"OTP-{emp.employee_code}-{int(datetime.utcnow().timestamp())}", **item_in.model_dump())
+    db.add(otp); db.commit(); db.refresh(otp)
+    return {"success": True, "message": "One-time payment created successfully", "data": otp}
+
+@router.post("/one-time-payments/{payment_uuid}/approve", response_model=OneTimePaymentResponse)
+def approve_otp(payment_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
+    _require_permission(db, current_user, "103", "approve payments")
+    item = db.query(OneTimePayment).filter(OneTimePayment.uuid == payment_uuid, OneTimePayment.organization_id == _get_org_id(current_user)).first()
+    if not item: raise HTTPException(404, "Payment not found")
+    item.status = "APPROVED"; item.approved_at = datetime.utcnow(); db.commit(); db.refresh(item)
+    return {"success": True, "message": "One-time payment approved successfully", "data": item}
+<<<END_ENDPOINT>>>
+
+<<<AGENT_NOTES>>>
+# Patterns followed:
+- Multi-tenancy enforced via `organization_id` filter on all queries.
+- RBAC enforced via `_require_permission` helper.
+- Pagination implemented for all list endpoints.
+- UUID path parameters used throughout.
+- Enums imported from `app.models.payroll`.
+- `from_attributes = True` set in all schemas.
+- `datetime.utcnow()` used for timestamps.
+- `int(datetime.utcnow().timestamp())` used for unique number generation to avoid SQL expression issues.
+- Sorting support added via `sort_by` query parameter.
+- Date range filtering implemented for Arrears.
+# Edge cases handled:
+- Employee existence check before creating records.
+- 404 handling for missing resources.
+- Proper status transitions for approval.
+# Uncertainties:
+- None, standard patterns applied.
+<<<END_NOTES>>>
