@@ -203,9 +203,10 @@
     },
     {
       "pattern": "Advanced listing features (sorting, search) are missing.",
-      "count": 1,
+      "count": 2,
       "modules": [
-        "loans"
+        "loans",
+        "reconciliations"
       ],
       "severity": "MINOR"
     },
@@ -480,6 +481,680 @@
         "arrears_one_time"
       ],
       "severity": "MINOR"
+    },
+    {
+      "pattern": "Create schema 'TaxDeclarationCreate' contains 'uuid:' which should not be in inp",
+      "count": 3,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Generic response message found: \"Retrieved\"",
+      "count": 3,
+      "modules": [
+        "tax_declarations",
+        "bank_files",
+        "journal_entries"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Generic response message found: \"Created\"",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Insecure ID usage: 'employee_uuid' is used as a filter for 'employee_id' in the ",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing RBAC check on 'add_items' endpoint.",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Lack of advanced filtering/sorting capabilities.",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Potential SQL injection vulnerability in sort_by parameter",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing transaction atomicity for bulk item insertion",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Incomplete filtering implementation",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Endpoint implementation is truncated/incomplete",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing RBAC check on submit_declaration endpoint",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Lack of validation for approved_amount vs declared_amount",
+      "count": 1,
+      "modules": [
+        "tax_declarations"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Create schema 'BankFileCreate' contains 'uuid:' which should not be in input sch",
+      "count": 3,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Update schema 'BankConfirmationUpdate' has non-Optional fields: ['utr_numbers']",
+      "count": 2,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Pagination logic in get_bank_file_records is hardcoded and ignores query paramet",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Hardcoded placeholder values ('N/A', '0') for employee data in BankFileRecord",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Potential N+1 query issue in loop",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing RBAC enforcement",
+      "count": 2,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Hardcoded file_url",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "List endpoint lacks sorting support (order_by) and advanced filtering beyond bas",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Potential race condition: Multiple concurrent requests could generate duplicate ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The code is truncated and incomplete; the function body is missing the return st",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Database session management in background tasks is risky. Using a global Session",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Hardcoded status strings ('generated', 'failed') instead of using the PayrollSta",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Background task uses a local session but does not handle potential database conn",
+      "count": 2,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The download endpoint loads all records into memory before streaming, which will",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The endpoint updates the bank file but does not update the individual BankFileRe",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Hardcoded file path logic and print statements for logging.",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Background task uses a local SessionLocal() but does not handle potential databa",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The CSV generation logic is inefficient and potentially unsafe. It creates a new",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The endpoint performs a heavy N+1 query pattern by joining and iterating through",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The schema uses a raw dict for UTR numbers, which lacks validation for the struc",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The sorting logic uses getattr on the model, which is a security risk if not str",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Background task uses a new SessionLocal() but does not properly handle database ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The CSV generator uses a custom 'Echo' class that does not actually write to the",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The bulk update logic uses `db.bulk_update_mappings` which bypasses SQLAlchemy O",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The sort_by logic is vulnerable to potential attribute errors if the map is not ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Background task uses a new SessionLocal() but does not handle potential database",
+      "count": 6,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The CSV generator uses a local 'Echo' class and 'csv.writer' incorrectly; the ge",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The logic uses 'db.bulk_update_mappings' but the 'mappings' list is constructed ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Hardcoded file path logic and print statements for error logging are not product",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The logic for mapping UTR numbers relies on a secondary query to fetch employee ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The 'status' field is a string, but the system has a defined PayrollStatus enum ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The CSV generation uses a manual string buffer and yield, which is memory-ineffi",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Enum redeclaration: BankFileStatus is defined in the schema file but should be i",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Hardcoded file path logic and potential race conditions in background task. Usin",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The logic for mapping UTR numbers uses a nested query inside a loop (N+1 problem",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The CSV generation uses yield with StringIO which is inefficient for large datas",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Background task uses a custom context manager that creates a new engine/session ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The endpoint accepts a dictionary of UUIDs but does not validate if the provided",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The CSVStreamer implementation is inefficient; it creates a new string buffer an",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The schema uses a raw dict for UTR numbers, which lacks validation for the forma",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The CSV generator logic is flawed; it attempts to write headers and data in a wa",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The endpoint updates records based on employee UUIDs but does not validate if th",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The use of a dict for UTR numbers is flexible but lacks a Pydantic model for the",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The CSV generation uses a custom 'Echo' class and manual string formatting, whic",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The UTR validation logic is flawed; it checks for duplicates against the entire ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing validation for 'bank_format' field.",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The logic updates the BankFile status to 'processed' and sets UTRs without verif",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The download endpoint uses a synchronous file write to memory which could lead t",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The schema lacks validation for the bank_name field, which is marked as optional",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The sorting implementation is vulnerable to potential SQL injection if the sort_",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The streaming response uses a generator that yields strings, but the CSV writer ",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The model validator uses 'after' mode but returns the instance; while functional",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The streaming generator uses yield on a StringIO object which is inefficient for",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The schema allows an empty list for utr_numbers, which might bypass validation l",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The sorting logic is hardcoded and does not handle potential SQL injection if th",
+      "count": 1,
+      "modules": [
+        "bank_files"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Path param 'issue_id' uses int type \u2014 must use uuid.UUID",
+      "count": 1,
+      "modules": [
+        "reconciliations"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Pagination logic in get_issues is hardcoded to return all items without actual o",
+      "count": 1,
+      "modules": [
+        "reconciliations"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Missing RBAC check for some endpoints or inconsistent application",
+      "count": 1,
+      "modules": [
+        "reconciliations"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'IssueResolveUpdate' has non-Optional fields: ['resolution_notes']",
+      "count": 1,
+      "modules": [
+        "reconciliations"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Missing multi-tenancy check on issue retrieval.",
+      "count": 1,
+      "modules": [
+        "reconciliations"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing multi-tenancy check on issue resolution.",
+      "count": 1,
+      "modules": [
+        "reconciliations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing multi-tenancy enforcement on state-changing endpoints.",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Hardcoded string types for status and entry_type instead of using Enums.",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Business logic is incomplete; lines are not created, and total_debit/total_credi",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Model attribute 'export_reference' is being set but is not defined in the SQLAlc",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Business logic flaw: Journal entries are generated with hardcoded 0 totals and n",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing RBAC checks on state-changing endpoints (post/reverse).",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing sorting/ordering support.",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Business logic failure: The generate endpoint creates a header but fails to gene",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Incomplete business logic: Reversing an entry should create a new 'reversal' ent",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Status and Entry Type fields are defined as 'str' instead of using Enums, which ",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The sorting implementation is vulnerable to SQL injection if 'field' is not vali",
+      "count": 1,
+      "modules": [
+        "journal_entries"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
@@ -530,7 +1205,82 @@
     "Ensure that all CRUD operations (Update/Delete) are implemented if the schema provides the corresponding DTOs.",
     "Always verify that SQLAlchemy functions like `func.now()` are used in query filters, not for Python-side string interpolation.",
     "Implement robust filtering and sorting for list endpoints to meet 'advanced_listing' requirements.",
-    "Use shared Enums from the models module to avoid magic strings in schemas and API logic."
+    "Use shared Enums from the models module to avoid magic strings in schemas and API logic.",
+    "Future generations should always validate that the UUID provided in the request body maps correctly to the internal integer ID used by the database.",
+    "Common pattern the agent missed: Always apply RBAC decorators or helper functions to every state-changing endpoint, not just the primary CRUD operations.",
+    "Ensure that response messages are descriptive and follow a consistent naming convention across the module.",
+    "Always sanitize dynamic attribute access (like sort_by) against a whitelist to prevent SQL injection.",
+    "Ensure that bulk operations are wrapped in explicit transaction handling to maintain data integrity.",
+    "When claiming 'advanced listing', implement at least one range-based filter (e.g., min/max amount) to justify the claim.",
+    "Always ensure the code block is fully closed and not truncated before outputting.",
+    "Perform a final pass to ensure every endpoint has an associated permission check, especially state-changing operations.",
+    "Use Pydantic's 'Field' for validation constraints (e.g., ge=0 for amounts) to improve API robustness.",
+    "Future generations should always ensure that list endpoints consistently implement pagination logic using the provided query parameters.",
+    "Common pattern the agent missed: Data integrity in generation endpoints; avoid hardcoding placeholders when relational data is available.",
+    "Always ensure that every endpoint, especially POST/PUT/DELETE, has an explicit RBAC check.",
+    "When iterating over related models (Payslip -> Employee), always use joinedload to optimize database performance.",
+    "Ensure that list endpoints include sorting parameters (e.g., sort_by, order) to meet the 'advanced_listing' criteria.",
+    "Always implement sorting (order_by) in list endpoints to ensure consistent UI behavior.",
+    "When performing state-changing operations based on a parent record (like PayrollPeriod), use SELECT FOR UPDATE to prevent race conditions.",
+    "Ensure that Update schemas are strictly defined as Optional to allow partial updates as per REST best practices.",
+    "Always ensure the generated code is syntactically complete and not truncated by output limits.",
+    "Avoid hardcoding status strings; always reference existing Enums to maintain type safety and consistency.",
+    "When using BackgroundTasks, ensure the database session is handled via a context manager to prevent connection pool exhaustion.",
+    "Always implement bulk updates for status changes rather than assuming a single flag update is sufficient for payroll records.",
+    "When dealing with file generation, always prefer streaming generators over loading full datasets into memory.",
+    "Ensure background tasks are decoupled from the main request lifecycle and handle database sessions with extreme care.",
+    "Always use bulk operations (bulk_update/bulk_insert) when dealing with payroll records to avoid performance degradation.",
+    "Avoid performing file I/O inside database transactions; keep the transaction scope as small as possible.",
+    "Ensure background tasks have robust logging and error reporting beyond a simple print statement.",
+    "Always use a context manager (with statement) for database sessions in background tasks to ensure closure.",
+    "When implementing CSV streaming, use the `csv` module with a `io.StringIO` buffer to ensure proper escaping and formatting.",
+    "Avoid bulk_update_mappings unless performance is a proven bottleneck; standard ORM updates are safer for HRM systems.",
+    "Always verify variable scope in generator functions (e.g., the 'writer' object in download_bank_file).",
+    "Avoid performing complex business logic inside background tasks without robust error handling and logging.",
+    "Ensure that bulk database operations are preceded by strict validation of the input mapping keys.",
+    "Always prefer using Enums from models over hardcoded strings for status fields.",
+    "Avoid performing database queries inside loops; use joins to fetch related data in a single round trip.",
+    "Ensure background tasks have robust error logging and state management beyond simple print statements.",
+    "Always ensure Enums are defined in the models layer and imported into schemas to prevent synchronization issues.",
+    "Avoid performing database queries inside loops; use bulk operations or pre-fetched dictionaries.",
+    "Keep imports at the top of the file; avoid local imports inside functions.",
+    "Ensure background tasks use a robust session management pattern to avoid connection pool exhaustion.",
+    "Always validate that input UUIDs in update operations belong to the authenticated tenant.",
+    "Avoid manual session management in background tasks; rely on established project-wide session factories.",
+    "Ensure that CSV generation uses streaming directly to the response object to minimize memory footprint.",
+    "Always use 'yield' in generators for streaming instead of manual buffer management with StringIO.",
+    "Background tasks should be handled via a robust task queue (like Celery) rather than raw FastAPI BackgroundTasks for production HRM systems to ensure retries and persistence.",
+    "Ensure that file system operations (like creating directories) are handled with proper error logging and cleanup.",
+    "Always use 'yield' with context managers for database sessions in background tasks to ensure cleanup.",
+    "Avoid manual CSV string concatenation; always use the 'csv' module with 'io.StringIO' to handle escaping and quoting correctly.",
+    "When performing duplicate checks, always exclude the current entity's ID to prevent false positives during updates.",
+    "Always ensure background tasks are robust against database connection exhaustion by using proper session management.",
+    "Implement state machine validation for status transitions (e.g., only allow 'processed' if status is 'generated').",
+    "Avoid loading large datasets into memory; prefer streaming generators for CSV exports.",
+    "Always implement a robust background task pattern that includes dependency injection or a dedicated task-scoped session manager.",
+    "When implementing CSV streaming, ensure the header is written only once and the buffer is flushed correctly to avoid malformed CSV output.",
+    "For advanced listing, consider using a dedicated filtering utility to keep endpoint logic clean and DRY.",
+    "Always use a dedicated task queue (Celery/RQ) for file generation tasks in production HRM systems to ensure retries and observability.",
+    "When streaming large CSVs, avoid StringIO; write directly to the response stream or use a temporary file path.",
+    "Ensure that background tasks have proper logging and error reporting that integrates with the main application monitoring.",
+    "Always ensure that pagination logic is fully implemented on all list endpoints, not just the primary one.",
+    "Standardize path parameters to use UUIDs across the entire module to maintain consistency with the rest of the system.",
+    "Implement advanced filtering (e.g., date ranges, search strings) to meet the 'advanced_listing' requirement.",
+    "Ensure that every endpoint, including GET requests, undergoes an RBAC check to prevent unauthorized data exposure.",
+    "Always verify that every database query involving a resource includes an organization_id filter, even when joining tables.",
+    "Implement a standard sorting and filtering utility for list endpoints to improve API usability.",
+    "Ensure that the 'current_user' organization context is applied to every single database operation, not just the primary resource.",
+    "Always verify that every database query, including those for single resources, includes the organization_id filter to prevent cross-tenant data leakage.",
+    "Use Pydantic Enums for status fields to prevent invalid data entry and improve API documentation.",
+    "Implement advanced filtering (e.g., date ranges, search strings) in list endpoints to meet production requirements.",
+    "Ensure that state-changing operations (like 'reverse') perform actual business logic (e.g., creating a negative entry) rather than just setting a boolean flag.",
+    "Always ensure state-changing endpoints (POST/PUT/PATCH) have explicit RBAC checks.",
+    "Business logic for 'Generate' endpoints must include the creation of child records (lines) to ensure data integrity.",
+    "List endpoints should support sorting (e.g., created_at DESC) to be production-ready.",
+    "Avoid hardcoding status strings; use the imported Enums/Constants.",
+    "Always ensure that 'Generate' endpoints actually perform the calculation logic, not just the header creation.",
+    "Accounting modules require strict transactional integrity; ensure that state changes (like reversal) follow double-entry bookkeeping principles.",
+    "Use Enums for status fields to prevent invalid data states."
   ],
   "module_scores": {
     "salary_components": 9.2,
@@ -543,9 +1293,13 @@
     "loans": 5.0,
     "reimbursements": 5.0,
     "final_settlements": 8.6,
-    "arrears_one_time": 8.8
+    "arrears_one_time": 8.8,
+    "tax_declarations": 5.0,
+    "bank_files": 7.2,
+    "reconciliations": 8.8,
+    "journal_entries": 5.0
   },
-  "total_cycles_used": 16,
+  "total_cycles_used": 40,
   "avg_cycles": {
     "salary_components": 1,
     "salary_templates": 1,
@@ -554,6 +1308,7 @@
     "audit_logs": 2,
     "payroll_periods": 1,
     "final_settlements": 3,
-    "arrears_one_time": 2
+    "arrears_one_time": 2,
+    "reconciliations": 3
   }
 }

@@ -334,6 +334,7 @@ class PayrollTaxDeclarationPermissions:
 class PayrollBankFilePermissions:
     READ   = "125"
     CREATE = "126"
+    UPDATE = "145"
 
 
 class PayrollAuditLogPermissions:

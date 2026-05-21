@@ -185,12 +185,12 @@ MODULE UNDER REVIEW: {module.upper()}
 
 SCHEMA FILE (app/schemas/payroll_{module}.py):
 ```python
-{schema_code[:6000]}
+{schema_code[:15000]}
 ```
 
 ENDPOINT FILE (app/api/v1/endpoints/payroll_{module}.py):
 ```python
-{endpoint_code[:8000]}
+{endpoint_code[:30000]}
 ```
 
 AGENT'S SELF-NOTES:

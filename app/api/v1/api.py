@@ -66,7 +66,8 @@ api_router.include_router(timesheet_policies.router, prefix="/timesheet-policies
 from app.api.v1.endpoints import (
     payroll_salary_components, payroll_salary_templates, payroll_employee_salaries,
     payroll_bank_accounts, payroll_audit_logs, payroll_periods, payroll_payslips, payroll_loans,
-    payroll_reimbursements, payroll_final_settlements, payroll_arrears_one_time
+    payroll_reimbursements, payroll_final_settlements, payroll_arrears_one_time,
+    payroll_tax_declarations, payroll_bank_files
 )
 
 api_router.include_router(payroll_salary_components.router, prefix="/payroll/salary-components", tags=["payroll"])
@@ -83,5 +84,8 @@ api_router.include_router(payroll_reimbursements.category_router, prefix="/payro
 api_router.include_router(payroll_reimbursements.employee_router, prefix="/payroll/employees", tags=["payroll"])
 api_router.include_router(payroll_final_settlements.router, prefix="/payroll/final-settlements", tags=["payroll"])
 api_router.include_router(payroll_arrears_one_time.router, prefix="/payroll", tags=["payroll"])
+api_router.include_router(payroll_tax_declarations.router, prefix="/payroll/tax-declarations", tags=["payroll"])
+api_router.include_router(payroll_bank_files.router, prefix="/payroll/bank-files", tags=["payroll"])
+
 
 

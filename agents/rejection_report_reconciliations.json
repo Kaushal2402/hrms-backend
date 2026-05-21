@@ -1,0 +1,54 @@
+{
+  "verdict": "FAIL",
+  "overall_score": 5.0,
+  "scores": {
+    "pattern_consistency": 9,
+    "multi_tenancy": 6,
+    "uuid_path_params": 10,
+    "pagination_correct": 10,
+    "schema_config": 10,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 9,
+    "rbac_enforced": 7,
+    "business_rules": 8,
+    "error_handling": 8,
+    "completeness": 7,
+    "advanced_listing": 3
+  },
+  "issues": [
+    {
+      "severity": "CRITICAL",
+      "file": "app/api/v1/endpoints/payroll_reconciliations.py",
+      "line_hint": "get_reconciliation_issues",
+      "issue": "Missing multi-tenancy check on issue retrieval.",
+      "fix": "Join with PayrollReconciliation and filter by organization_id to prevent cross-tenant data leakage."
+    },
+    {
+      "severity": "MAJOR",
+      "file": "app/api/v1/endpoints/payroll_reconciliations.py",
+      "line_hint": "resolve_issue",
+      "issue": "Missing multi-tenancy check on issue resolution.",
+      "fix": "Ensure the query filters by organization_id to prevent users from resolving issues in other organizations."
+    },
+    {
+      "severity": "MINOR",
+      "file": "app/api/v1/endpoints/payroll_reconciliations.py",
+      "line_hint": "get_reconciliations",
+      "issue": "Advanced listing features (sorting, search) are missing.",
+      "fix": "Add support for sorting parameters (e.g., sort_by, order) and search functionality for reconciliation numbers."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Always verify that every database query involving a resource includes an organization_id filter, even when joining tables.",
+    "Implement a standard sorting and filtering utility for list endpoints to improve API usability.",
+    "Ensure that the 'current_user' organization context is applied to every single database operation, not just the primary resource."
+  ],
+  "passed_checks": [
+    "Pattern consistency",
+    "UUID path parameters",
+    "Pagination logic",
+    "Schema configuration",
+    "Enum usage",
+    "Create/Update schema structure"
+  ]
+}

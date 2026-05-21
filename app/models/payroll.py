@@ -62,6 +62,13 @@ class ReimbursementStatus(str, enum.Enum):
     REJECTED = "rejected"
     PAID = "paid"
 
+class BankFileStatus(str, enum.Enum):
+    GENERATING = "generating"
+    GENERATED = "generated"
+    UPLOADED = "uploaded"
+    PROCESSED = "processed"
+    FAILED = "failed"
+
 class TaxRegime(str, enum.Enum):
     OLD = "old"
     NEW = "new"
@@ -474,6 +481,10 @@ class Payslip(Base):
     # Payment Details
     bank_account_id = Column(Integer, ForeignKey('employee_bank_accounts.id'), nullable=True)
     payment_mode = Column(String(20), nullable=True)
+    
+    # Relationships
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    bank_account = relationship("EmployeeBankAccount", foreign_keys=[bank_account_id])
     
     # Status
     status = Column(Enum(PayslipStatus), default=PayslipStatus.GENERATED, nullable=False, index=True)
@@ -1022,6 +1033,9 @@ class TaxDeclaration(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    items = relationship("TaxDeclarationItem", backref="declaration", cascade="all, delete-orphan")
+    
     __table_args__ = (
         Index('idx_tax_decl_emp_fy', 'employee_id', 'financial_year'),
     )
@@ -1032,6 +1046,7 @@ class TaxDeclarationItem(Base):
     __tablename__ = "tax_declaration_items"
     
     id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(GUID(), default=uuid.uuid4, unique=True, nullable=False, index=True)
     tax_declaration_id = Column(Integer, ForeignKey('tax_declarations.id'), nullable=False, index=True)
     
     # Tax Section
@@ -1192,6 +1207,7 @@ class BankFileRecord(Base):
     __tablename__ = "bank_file_records"
     
     id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(GUID(), default=uuid.uuid4, unique=True, nullable=False, index=True)
     bank_file_id = Column(Integer, ForeignKey('bank_files.id'), nullable=False, index=True)
     payslip_id = Column(Integer, ForeignKey('payslips.id'), nullable=False)
     
