@@ -8,7 +8,7 @@ from app.models.payroll import PayrollStatus
 class PayrollReconciliationBase(BaseModel):
     payroll_period_uuid: UUID4
     previous_period_uuid: Optional[UUID4] = None
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=500)
 
 class PayrollReconciliationCreate(PayrollReconciliationBase):
     pass
@@ -29,7 +29,7 @@ class PayrollReconciliationSchema(BaseModel):
     previous_employee_count: Optional[int] = None
     new_joiners: int
     exits: int
-    status: str
+    status: PayrollStatus
     notes: Optional[str] = None
     created_at: datetime
 
@@ -61,4 +61,4 @@ class PayrollReconciliationIssueListResponse(PaginatedResponse[List[PayrollRecon
     pass
 
 class IssueResolveUpdate(BaseModel):
-    resolution_notes: str = Field(..., min_length=1)
+    resolution_notes: Optional[str] = Field(None, min_length=1)

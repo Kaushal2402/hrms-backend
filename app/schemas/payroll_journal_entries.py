@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel, UUID4
 from datetime import date, datetime
 from decimal import Decimal
@@ -35,8 +35,10 @@ class PayrollJournalEntryBase(BaseModel):
     narration: Optional[str] = None
 
 class PayrollJournalEntryCreate(BaseModel):
-    payroll_period_id: int
-    entry_type: str
+    payroll_period_id: Optional[Union[int, str]] = None
+    payroll_period_uuid: Optional[UUID4] = None
+    entry_type: Optional[str] = None
+    entry_types: Optional[List[str]] = None
 
 class PayrollJournalEntryUpdate(BaseModel):
     narration: Optional[str] = None

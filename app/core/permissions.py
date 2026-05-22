@@ -365,6 +365,7 @@ class PayrollStatutoryFormPermissions:
 class PayrollReconciliationPermissions:
     READ   = "137"
     CREATE = "138"
+    UPDATE = "138"
 
 
 class PayrollJournalEntryPermissions:

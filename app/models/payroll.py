@@ -1354,6 +1354,7 @@ class PayrollReconciliationIssue(Base):
     __tablename__ = "payroll_reconciliation_issues"
     
     id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(GUID(), default=uuid.uuid4, unique=True, nullable=False, index=True)
     reconciliation_id = Column(Integer, ForeignKey('payroll_reconciliations.id'), nullable=False, index=True)
     
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=True)
@@ -1434,6 +1435,8 @@ class PayrollJournalEntry(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
 
+    lines = relationship("PayrollJournalEntryLine", back_populates="journal_entry", cascade="all, delete-orphan")
+
 
 class PayrollJournalEntryLine(Base):
     """Journal entry line items"""
@@ -1465,6 +1468,8 @@ class PayrollJournalEntryLine(Base):
     component_id = Column(Integer, ForeignKey('salary_components.id'), nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    journal_entry = relationship("PayrollJournalEntry", back_populates="lines")
 
 
 # ============================================================================
