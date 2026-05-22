@@ -1,0 +1,73 @@
+{
+  "verdict": "FAIL",
+  "overall_score": 5.0,
+  "scores": {
+    "pattern_consistency": 7,
+    "multi_tenancy": 10,
+    "uuid_path_params": 8,
+    "pagination_correct": 0,
+    "schema_config": 9,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 5,
+    "rbac_enforced": 10,
+    "business_rules": 6,
+    "error_handling": 6,
+    "completeness": 7,
+    "advanced_listing": 0
+  },
+  "issues": [
+    {
+      "severity": "MAJOR",
+      "file": "payroll_bulk_operations_schema.py",
+      "line_hint": "class BulkComponentAdjustmentCreate",
+      "issue": "Create schema 'BulkComponentAdjustmentCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from BulkComponentAdjustmentCreate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "payroll_bulk_operations_schema.py",
+      "line_hint": "class ArrearCreate",
+      "issue": "Create schema 'ArrearCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from ArrearCreate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "payroll_bulk_operations_schema.py",
+      "line_hint": "class OneTimePaymentCreate",
+      "issue": "Create schema 'OneTimePaymentCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from OneTimePaymentCreate"
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "payroll_bulk_operations.py",
+      "line_hint": "bulk_salary_revision",
+      "issue": "N+1 query risk: The code fetches employees then iterates to perform logic, but does not handle partial failures or provide granular feedback in the response.",
+      "fix": "Implement a loop that tracks success/failure per employee and returns a detailed error list in the response object."
+    },
+    {
+      "severity": "MAJOR",
+      "file": "payroll_bulk_operations.py",
+      "line_hint": "bulk_create_arrears / bulk_create_one_time_payments",
+      "issue": "Inefficient database interaction: Performing individual queries inside a loop for employee validation is an N+1 anti-pattern.",
+      "fix": "Fetch all relevant employees in a single query using `WHERE uuid IN (...)` before the loop."
+    },
+    {
+      "severity": "MINOR",
+      "file": "payroll_bulk_operations.py",
+      "line_hint": "bulk_salary_revision",
+      "issue": "Floating point precision risk: Direct arithmetic on Decimal fields without explicit rounding or context management.",
+      "fix": "Use `quantize` on Decimal values to ensure currency precision (e.g., 2 decimal places)."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Always batch fetch related entities (Employees) using `IN` clauses rather than querying inside loops.",
+    "Bulk operations should return granular success/failure reports rather than failing the entire transaction for one invalid record.",
+    "Ensure all input schemas strictly exclude database-generated primary keys or UUIDs."
+  ],
+  "passed_checks": [
+    "Multi-tenancy enforced via organization_id",
+    "RBAC implemented via _require_permission",
+    "Transaction safety via db.rollback()",
+    "Response envelope pattern followed"
+  ]
+}

@@ -71,7 +71,7 @@ from app.api.v1.endpoints import (
     payroll_bank_accounts, payroll_audit_logs, payroll_periods, payroll_payslips, payroll_loans,
     payroll_reimbursements, payroll_final_settlements, payroll_arrears_one_time,
     payroll_tax_declarations, payroll_bank_files, payroll_reconciliations, payroll_journal_entries,
-    payroll_statutory_forms
+    payroll_statutory_forms, payroll_bulk_operations
 )
 
 api_router.include_router(payroll_salary_components.router, prefix="/payroll/salary-components", tags=["payroll"])
@@ -94,6 +94,7 @@ api_router.include_router(payroll_reconciliations.router, prefix="/payroll/recon
 api_router.include_router(payroll_journal_entries.router, prefix="/payroll/journal-entries", tags=["payroll"])
 api_router.include_router(payroll_statutory_forms.router, prefix="/payroll/statutory-forms", tags=["payroll"])
 api_router.include_router(payroll_statutory_forms.employee_router, prefix="/payroll/employees", tags=["payroll"])
+api_router.include_router(payroll_bulk_operations.router, prefix="/payroll/bulk-operations", tags=["payroll"])
 
 
 

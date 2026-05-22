@@ -44,7 +44,7 @@ MAX_CYCLES = 3
 # ./hrmenv/bin/python agents/orchestrator.py
 
 # Run just one module
-# ./hrmenv/bin/python agents/orchestrator.py --module journal_entries
+# ./hrmenv/bin/python agents/orchestrator.py --module bulk_operations
 
 # Force regenerate a module
 # ./hrmenv/bin/python agents/orchestrator.py --module salary_components --force

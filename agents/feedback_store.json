@@ -1155,6 +1155,86 @@
         "journal_entries"
       ],
       "severity": "MINOR"
+    },
+    {
+      "pattern": "Create schema 'BulkComponentAdjustmentCreate' contains 'uuid:' which should not ",
+      "count": 3,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Create schema 'ArrearCreate' contains 'uuid:' which should not be in input schem",
+      "count": 3,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Create schema 'OneTimePaymentCreate' contains 'uuid:' which should not be in inp",
+      "count": 3,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "N+1 query problem: The loop performs a database query for every employee in the ",
+      "count": 1,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Lack of transaction safety: If one operation fails mid-loop, the partial state i",
+      "count": 1,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "N+1 query risk: The code fetches employees then iterates to perform logic, but d",
+      "count": 1,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Inefficient database interaction: Performing individual queries inside a loop fo",
+      "count": 1,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Floating point precision risk: Direct arithmetic on Decimal fields without expli",
+      "count": 1,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Database commit inside a loop causes performance degradation and potential parti",
+      "count": 1,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Endpoint is incomplete; logic implementation is missing.",
+      "count": 1,
+      "modules": [
+        "bulk_operations"
+      ],
+      "severity": "MINOR"
     }
   ],
   "improvement_hints": [
@@ -1280,7 +1360,16 @@
     "Avoid hardcoding status strings; use the imported Enums/Constants.",
     "Always ensure that 'Generate' endpoints actually perform the calculation logic, not just the header creation.",
     "Accounting modules require strict transactional integrity; ensure that state changes (like reversal) follow double-entry bookkeeping principles.",
-    "Use Enums for status fields to prevent invalid data states."
+    "Use Enums for status fields to prevent invalid data states.",
+    "Always use bulk fetching (e.g., `.filter(Model.uuid.in_(list))`) instead of querying inside a loop to avoid N+1 performance bottlenecks.",
+    "Ensure that bulk operations are wrapped in explicit transaction blocks to maintain data integrity.",
+    "Even if an endpoint is a 'bulk' operation, consider if it needs to return paginated results or if it should follow the standard response envelope pattern used elsewhere in the system.",
+    "Always batch fetch related entities (Employees) using `IN` clauses rather than querying inside loops.",
+    "Bulk operations should return granular success/failure reports rather than failing the entire transaction for one invalid record.",
+    "Ensure all input schemas strictly exclude database-generated primary keys or UUIDs.",
+    "Avoid committing inside loops; use atomic transactions for bulk operations to ensure data integrity.",
+    "Ensure input schemas strictly contain only user-provided fields, excluding system-generated identifiers like UUIDs or IDs.",
+    "Even for bulk POST endpoints, ensure that any referenced resources (like component_uuid) are validated against the organization context."
   ],
   "module_scores": {
     "salary_components": 9.2,
@@ -1297,9 +1386,10 @@
     "tax_declarations": 5.0,
     "bank_files": 7.2,
     "reconciliations": 8.8,
-    "journal_entries": 5.0
+    "journal_entries": 5.0,
+    "bulk_operations": 6.8
   },
-  "total_cycles_used": 40,
+  "total_cycles_used": 43,
   "avg_cycles": {
     "salary_components": 1,
     "salary_templates": 1,
