@@ -21,6 +21,7 @@ from app.schemas.payroll_payslips import (
 from app.core.permissions import PayrollPayslipPermissions
 from app.utils.email import send_payslip_email
 from app.utils.pdf import generate_pdf, get_payslip_html
+from app.utils.payroll_audit import PayrollAuditService
 from datetime import datetime
 
 router = APIRouter()
@@ -211,25 +212,64 @@ def get_payslip_details(payslip_uuid: uuid.UUID, db: Session = Depends(deps.get_
 @router.patch("/{payslip_uuid}/hold", response_model=PayslipResponse)
 def hold_payslip(payslip_uuid: uuid.UUID, data: PayslipHoldUpdate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
     _require_permission(db, current_user, PayrollPayslipPermissions.PUBLISH, "hold payslip")
-    payslip = db.query(Payslip).filter(Payslip.uuid == payslip_uuid, Payslip.organization_id == _get_org_id(current_user)).first()
-    if not payslip or payslip.is_published: raise HTTPException(status_code=400, detail="Cannot hold published payslip")
+    item = db.query(Payslip).filter(Payslip.uuid == payslip_uuid, Payslip.organization_id == _get_org_id(current_user)).first()
+    if not item: raise HTTPException(404, "Payslip not found")
+    if item.status.value in ["paid", "reversed"]:
+        raise HTTPException(400, f"Cannot hold a {item.status.value} payslip")
     
-    payslip.is_on_hold = True
-    payslip.hold_reason = data.hold_reason
+    before_state = PayrollAuditService.get_model_dict(item)
+    
+    item.status = PayslipStatus.ON_HOLD
+    item.hold_reason = data.reason
+    
     db.commit()
-    return {"success": True, "message": "Payslip held successfully", "data": PayslipSchema.model_validate(payslip)}
+    db.refresh(item)
+    
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="payslip_held",
+        entity_type="payslip",
+        entity_id=item.id,
+        employee_id=item.employee_id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(item),
+        risk_level="high",
+        change_summary=f"Held payslip for {item.employee.first_name}"
+    )
+    
+    return {"success": True, "message": "Payslip placed on hold", "data": item}
 
 @router.post("/{payslip_uuid}/reverse", response_model=PayslipResponse)
 def reverse_payslip(payslip_uuid: uuid.UUID, data: PayslipReverseCreate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
     _require_permission(db, current_user, PayrollPayslipPermissions.REVERSE, "reverse payslip")
-    payslip = db.query(Payslip).filter(Payslip.uuid == payslip_uuid, Payslip.organization_id == _get_org_id(current_user)).first()
-    if not payslip: raise HTTPException(status_code=404, detail="Payslip not found")
+    item = db.query(Payslip).filter(Payslip.uuid == payslip_uuid, Payslip.organization_id == _get_org_id(current_user)).first()
+    if not item: raise HTTPException(404, "Payslip not found")
+    if item.status.value == "draft":
+        raise HTTPException(400, "Cannot reverse a draft payslip")
+        
+    before_state = PayrollAuditService.get_model_dict(item)
     
-    payslip.is_reversed = True
-    payslip.reversed_at = func.now()
-    payslip.reversal_reason = data.reversal_reason
+    item.status = PayslipStatus.REVERSED
+    item.reversal_reason = data.reason
+    
     db.commit()
-    return {"success": True, "message": "Payslip reversed successfully", "data": PayslipSchema.model_validate(payslip)}
+    db.refresh(item)
+    
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="payslip_reversed",
+        entity_type="payslip",
+        entity_id=item.id,
+        employee_id=item.employee_id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(item),
+        risk_level="high",
+        change_summary=f"Reversed payslip for {item.employee.first_name}"
+    )
+    
+    return {"success": True, "message": "Payslip reversed successfully", "data": item}
 
 def process_bulk_email(payslip_ids: List[int]):
     db = SessionLocal()
@@ -405,8 +445,24 @@ def regenerate_payslip(
     if payslip.is_published:
         raise HTTPException(status_code=400, detail="Cannot regenerate a published payslip. Reverse it first.")
 
+    before_state = PayrollAuditService.get_model_dict(payslip)
+    
     payslip.updated_at = func.now()
     db.commit()
+    db.refresh(payslip)
+    
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="payslip_regenerated",
+        entity_type="payslip",
+        entity_id=payslip.id,
+        employee_id=payslip.employee_id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(payslip),
+        risk_level="high",
+        change_summary=f"Regenerated payslip for {payslip.employee.first_name}"
+    )
     
     return {"success": True, "message": "Payslip regeneration triggered", "data": None}
 

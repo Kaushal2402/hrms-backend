@@ -19,6 +19,7 @@ from app.schemas.payroll_periods import (
     PayrollSummaryResponse, PayrollPeriodLookupResponse
 )
 from app.core.permissions import PayrollPeriodPermissions
+from app.utils.payroll_audit import PayrollAuditService
 
 router = APIRouter()
 
@@ -103,11 +104,27 @@ def get_period(period_uuid: uuid.UUID, db: Session = Depends(deps.get_db), curre
 @router.put("/{period_uuid}", response_model=PayrollPeriodResponse)
 def update_period(period_uuid: uuid.UUID, item_in: PayrollPeriodUpdate, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
     _require_permission(db, current_user, PayrollPeriodPermissions.UPDATE, "update")
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == _get_org_id(current_user)).first()
-    if not item or item.is_locked: raise HTTPException(400, "Period not found or locked")
-    for f, v in item_in.model_dump(exclude_unset=True).items(): setattr(item, f, v)
-    db.commit(); db.refresh(item)
-    return {"success": True, "message": "Updated successfully", "data": item}
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == _get_org_id(current_user)).first()
+    if not period or period.is_locked: raise HTTPException(400, "Period not found or locked")
+    if period.status != PayrollStatus.DRAFT:
+        raise HTTPException(status_code=400, detail="Only draft periods can be updated")
+
+    before_state = PayrollAuditService.get_model_dict(period)
+    for f, v in item_in.model_dump(exclude_unset=True).items(): setattr(period, f, v)
+    db.commit(); db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_updated",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="medium",
+        change_summary=f"Updated payroll period {period.period_name}"
+    )
+    return {"success": True, "message": "Updated successfully", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.post("/{period_uuid}/process", response_model=PayrollPeriodResponse)
 def process_payroll(
@@ -118,21 +135,21 @@ def process_payroll(
 ):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "process")
     org_id = _get_org_id(current_user)
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not item: raise HTTPException(404, "Period not found")
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
     
-    if item.status.value != PayrollStatus.APPROVED.value:
-        raise HTTPException(400, f"Only approved periods can be processed. Current status: {item.status}")
+    if period.status.value != PayrollStatus.APPROVED.value:
+        raise HTTPException(400, f"Only approved periods can be processed. Current status: {period.status}")
     
-    # 1. Clear existing payslips for re-processing (if not already paid/published)
+    # 1. Clear existing payslips for re-processing
     db.query(PayslipComponent).filter(
         PayslipComponent.payslip_id.in_(
-            db.query(Payslip.id).filter(Payslip.payroll_period_id == item.id)
+            db.query(Payslip.id).filter(Payslip.payroll_period_id == period.id)
         )
     ).delete(synchronize_session=False)
-    db.query(Payslip).filter(Payslip.payroll_period_id == item.id).delete(synchronize_session=False)
+    db.query(Payslip).filter(Payslip.payroll_period_id == period.id).delete(synchronize_session=False)
     
-    # 2. Fetch all eligible employees (active with assigned salary)
+    # 2. Fetch all eligible employees
     salaries = db.query(EmployeeSalary).filter(
         EmployeeSalary.organization_id == org_id,
         EmployeeSalary.is_active == True,
@@ -147,20 +164,19 @@ def process_payroll(
     
     # 3. Generate Payslips
     for salary in salaries:
-        # Create Payslip
         payslip = Payslip(
             organization_id=org_id,
-            payroll_period_id=item.id,
+            payroll_period_id=period.id,
             employee_id=salary.employee_id,
             employee_salary_id=salary.id,
-            payslip_number=f"PS-{org_id}-{item.period_code}-{salary.employee_id}-{uuid.uuid4().hex[:4]}",
-            period_start_date=item.period_start_date,
-            period_end_date=item.period_end_date,
-            payment_date=item.payment_date,
-            total_working_days=item.total_working_days,
-            paid_days=item.total_working_days, # Default to full pay, can be refined later
-            days_present=item.total_working_days,
-            basic_salary=salary.monthly_gross * Decimal("0.5"), # Simple mock logic for basic
+            payslip_number=f"PS-{org_id}-{period.period_code}-{salary.employee_id}-{uuid.uuid4().hex[:4]}",
+            period_start_date=period.period_start_date,
+            period_end_date=period.period_end_date,
+            payment_date=period.payment_date,
+            total_working_days=period.total_working_days,
+            paid_days=period.total_working_days,
+            days_present=period.total_working_days,
+            basic_salary=salary.monthly_gross * Decimal("0.5"),
             gross_salary=salary.monthly_gross,
             total_earnings=salary.monthly_gross,
             total_deductions=salary.monthly_gross - salary.monthly_net,
@@ -170,16 +186,15 @@ def process_payroll(
             is_published=False
         )
         db.add(payslip)
-        db.flush() # Get payslip.id
+        db.flush() 
         
-        # Add Components
         comp_query = db.query(EmployeeSalaryComponent).filter(EmployeeSalaryComponent.employee_salary_id == salary.id)
         for esc in comp_query.all():
             ps_comp = PayslipComponent(
                 payslip_id=payslip.id,
                 component_id=esc.component_id,
-                component_name="Component", # In real app, join with SalaryComponent
-                component_type=ComponentType.EARNING, # Simplified
+                component_name="Component",
+                component_type=ComponentType.EARNING,
                 monthly_amount=esc.monthly_amount,
                 actual_amount=esc.monthly_amount
             )
@@ -191,21 +206,33 @@ def process_payroll(
         total_employer_contrib += (salary.monthly_ctc - salary.monthly_gross)
         headcount += 1
         
-    # 4. Update Period Totals
-    item.total_employees = headcount
-    item.total_gross_amount = total_gross
-    item.total_deductions = total_deductions
-    item.total_net_amount = total_net
-    item.total_employer_contributions = total_employer_contrib
+    period.total_employees = headcount
+    period.total_gross_amount = total_gross
+    period.total_deductions = total_deductions
+    period.total_net_amount = total_net
+    period.total_employer_contributions = total_employer_contrib
     
-    item.status = PayrollStatus.PROCESSED
-    item.processing_completed_at = func.now()
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.status = PayrollStatus.PROCESSED
+    period.processing_completed_at = func.now()
     if not isinstance(current_user, Organization):
-        item.processed_by = current_user.id
+        period.processed_by = current_user.id
     
     db.commit()
-    db.refresh(item)
-    return {"success": True, "message": f"Payroll processed successfully. {headcount} payslips generated.", "data": item}
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_processed",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="high",
+        change_summary=f"Processed payroll period {period.period_name}"
+    )
+    return {"success": True, "message": f"Payroll processed successfully. {headcount} payslips generated.", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.get("/{period_uuid}/summary", response_model=PayrollSummaryResponse)
 def get_summary(period_uuid: uuid.UUID, db: Session = Depends(deps.get_db), current_user: Union[Organization, Employee] = Depends(deps.get_current_user)):
@@ -222,20 +249,33 @@ def submit_for_approval(
 ):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "submit for approval")
     org_id = _get_org_id(current_user)
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not item: raise HTTPException(404, "Period not found")
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
     
-    if item.status not in [PayrollStatus.DRAFT, PayrollStatus.IN_PROGRESS, PayrollStatus.ON_HOLD]:
-        raise HTTPException(400, f"Cannot submit for approval from status: {item.status}")
+    if period.status != PayrollStatus.PROCESSED:
+        raise HTTPException(400, f"Cannot submit for approval from status: {period.status}")
     
-    item.status = PayrollStatus.PENDING_APPROVAL
-    item.submitted_for_approval_at = func.now()
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.status = PayrollStatus.PENDING_APPROVAL
+    period.submitted_for_approval_at = func.now()
     if not isinstance(current_user, Organization):
-        item.submitted_by = current_user.id
+        period.submitted_by = current_user.id
     
     db.commit()
-    db.refresh(item)
-    return {"success": True, "message": "Payroll submitted for approval", "data": item}
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_submitted",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="medium",
+        change_summary=f"Submitted payroll period {period.period_name} for approval"
+    )
+    return {"success": True, "message": "Payroll submitted for approval", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.post("/{period_uuid}/approve", response_model=PayrollPeriodResponse)
 def approve_payroll(
@@ -246,21 +286,34 @@ def approve_payroll(
 ):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "approve payroll")
     org_id = _get_org_id(current_user)
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not item: raise HTTPException(404, "Period not found")
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
     
-    if item.status != PayrollStatus.PENDING_APPROVAL:
+    if period.status != PayrollStatus.PENDING_APPROVAL:
         raise HTTPException(400, "Only pending approval periods can be approved")
     
-    item.status = PayrollStatus.APPROVED
-    item.approved_at = func.now()
-    item.approval_comments = data.comments
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.status = PayrollStatus.APPROVED
+    period.approved_at = func.now()
+    period.approval_comments = data.comments
     if not isinstance(current_user, Organization):
-        item.approved_by = current_user.id
+        period.approved_by = current_user.id
     
     db.commit()
-    db.refresh(item)
-    return {"success": True, "message": "Payroll approved successfully", "data": item}
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_approved",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="high",
+        change_summary=f"Approved payroll period {period.period_name}"
+    )
+    return {"success": True, "message": "Payroll approved successfully", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.post("/{period_uuid}/publish", response_model=PayrollPeriodResponse)
 def publish_payroll(
@@ -270,20 +323,20 @@ def publish_payroll(
 ):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "publish payroll")
     org_id = _get_org_id(current_user)
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not item: raise HTTPException(404, "Period not found")
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
     
-    if item.status.value != PayrollStatus.PROCESSED.value:
-        raise HTTPException(400, f"Only processed periods can be published. Current status: {item.status}")
+    if period.status != PayrollStatus.APPROVED:
+        raise HTTPException(400, f"Only approved periods can be published. Current status: {period.status}")
     
-    item.status = PayrollStatus.PUBLISHED
-    item.published_at = func.now()
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.status = PayrollStatus.PUBLISHED
+    period.published_at = func.now()
     if not isinstance(current_user, Organization):
-        item.published_by = current_user.id
+        period.published_by = current_user.id
         
-    # Bulk update payslips
     db.query(Payslip).filter(
-        Payslip.payroll_period_id == item.id,
+        Payslip.payroll_period_id == period.id,
         Payslip.organization_id == org_id
     ).update({
         Payslip.is_published: True,
@@ -292,8 +345,20 @@ def publish_payroll(
     }, synchronize_session=False)
     
     db.commit()
-    db.refresh(item)
-    return {"success": True, "message": "Payroll published successfully", "data": item}
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_published",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="high",
+        change_summary=f"Published payroll period {period.period_name} payslips to employees"
+    )
+    return {"success": True, "message": "Payroll published successfully", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.post("/{period_uuid}/lock", response_model=PayrollPeriodResponse)
 def lock_period(
@@ -303,17 +368,33 @@ def lock_period(
 ):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "lock period")
     org_id = _get_org_id(current_user)
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not item: raise HTTPException(404, "Period not found")
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
     
-    item.is_locked = True
-    item.locked_at = func.now()
+    if period.is_locked:
+        raise HTTPException(status_code=400, detail="Period is already locked")
+
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.is_locked = True
+    period.locked_at = func.now()
     if not isinstance(current_user, Organization):
-        item.locked_by = current_user.id
+        period.locked_by = current_user.id
     
     db.commit()
-    db.refresh(item)
-    return {"success": True, "message": "Period locked successfully", "data": item}
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_locked",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="high",
+        change_summary=f"Locked payroll period {period.period_name} against further edits"
+    )
+    return {"success": True, "message": "Period locked successfully", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.post("/{period_uuid}/unlock", response_model=PayrollPeriodResponse)
 def unlock_period(
@@ -323,16 +404,29 @@ def unlock_period(
 ):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "unlock period")
     org_id = _get_org_id(current_user)
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not item: raise HTTPException(404, "Period not found")
-    
-    item.is_locked = False
-    item.locked_at = None
-    item.locked_by = None
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
+    if not period.is_locked:
+        raise HTTPException(status_code=400, detail="Period is not locked")
+
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.is_locked = False
     
     db.commit()
-    db.refresh(item)
-    return {"success": True, "message": "Period unlocked successfully", "data": item}
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_unlocked",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="high",
+        change_summary=f"Unlocked payroll period {period.period_name} for edits"
+    )
+    return {"success": True, "message": "Period unlocked successfully", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.post("/{period_uuid}/hold", response_model=PayrollPeriodResponse)
 def hold_period(
@@ -343,16 +437,29 @@ def hold_period(
 ):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "hold period")
     org_id = _get_org_id(current_user)
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not item: raise HTTPException(404, "Period not found")
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
     
-    item.status = PayrollStatus.ON_HOLD
-    item.is_on_hold = True
-    item.hold_reason = data.reason or data.comments
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.status = PayrollStatus.ON_HOLD
+    period.is_on_hold = True
+    period.hold_reason = data.reason or data.comments
     
     db.commit()
-    db.refresh(item)
-    return {"success": True, "message": "Payroll period put on hold", "data": item}
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_held",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="high",
+        change_summary=f"Put payroll period {period.period_name} on hold"
+    )
+    return {"success": True, "message": "Payroll period put on hold", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.post("/{period_uuid}/reverse", response_model=PayrollPeriodResponse)
 def reverse_period(
@@ -363,15 +470,35 @@ def reverse_period(
 ):
     _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "reverse period")
     org_id = _get_org_id(current_user)
-    item = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not item: raise HTTPException(404, "Period not found")
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
     
-    if item.status not in [PayrollStatus.PROCESSED, PayrollStatus.PAID, PayrollStatus.PUBLISHED]:
-        raise HTTPException(400, "Only processed, paid or published periods can be reversed")
+    if period.status in [PayrollStatus.DRAFT, PayrollStatus.REVERSED]:
+        raise HTTPException(status_code=400, detail="Cannot reverse this period")
+
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.status = PayrollStatus.REVERSED
+    period.reversal_reason = data.reason or data.comments
     
-    item.status = PayrollStatus.REVERSED
-    # Logic for reversing individual payslips would ideally be triggered here
+    db.query(Payslip).filter(
+        Payslip.payroll_period_id == period.id,
+        Payslip.organization_id == org_id
+    ).update({
+        Payslip.status: PayslipStatus.REVERSED
+    }, synchronize_session=False)
     
     db.commit()
-    db.refresh(item)
-    return {"success": True, "message": "Payroll period reversed", "data": item}
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_reversed",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="high",
+        change_summary=f"Reversed payroll period {period.period_name} and all associated payslips"
+    )
+    return {"success": True, "message": "Payroll period and related payslips reversed successfully", "data": PayrollPeriodSchema.model_validate(period)}
