@@ -36,6 +36,12 @@ def _require_permission(db: Session, current_user: Union[Organization, Employee]
     if not deps.has_permission(db, current_user, code):
         raise HTTPException(status_code=403, detail=f"Permission denied: {action_label}")
 
+def _require_any_permission(db: Session, current_user: Union[Organization, Employee], codes: List[str], action_label: str):
+    if isinstance(current_user, Organization):
+        return
+    if not any(deps.has_permission(db, current_user, code) for code in codes):
+        raise HTTPException(status_code=403, detail=f"Permission denied: {action_label}")
+
 # ----------------------------------------------------------------------------
 # 1. REIMBURSEMENT CATEGORIES ENDPOINTS
 # ----------------------------------------------------------------------------
@@ -47,6 +53,11 @@ def get_categories(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
+    _require_any_permission(
+        db, current_user,
+        [PayrollReimbursementPermissions.READ, PayrollReimbursementPermissions.CREATE, PayrollReimbursementPermissions.APPROVE],
+        "list categories"
+    )
     org_id = _get_org_id(current_user)
     query = db.query(ReimbursementCategory).filter(ReimbursementCategory.organization_id == org_id)
     if is_active is not None:
@@ -123,6 +134,11 @@ def get_category(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
+    _require_any_permission(
+        db, current_user,
+        [PayrollReimbursementPermissions.READ, PayrollReimbursementPermissions.CREATE, PayrollReimbursementPermissions.APPROVE],
+        "view category details"
+    )
     org_id = _get_org_id(current_user)
     cat = db.query(ReimbursementCategory).filter(
         ReimbursementCategory.uuid == category_uuid,
@@ -172,11 +188,16 @@ def get_claims(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
+    _require_any_permission(
+        db, current_user,
+        [PayrollReimbursementPermissions.READ, PayrollReimbursementPermissions.APPROVE],
+        "list claims"
+    )
     org_id = _get_org_id(current_user)
     query = db.query(ReimbursementClaim).filter(ReimbursementClaim.organization_id == org_id)
     
     # Non-admin users can ONLY see their own claims
-    is_admin = isinstance(current_user, Organization) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.APPROVE)
+    is_admin = isinstance(current_user, Organization) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.APPROVE) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.READ)
     
     if not is_admin:
         query = query.filter(ReimbursementClaim.employee_id == current_user.id)
@@ -247,7 +268,11 @@ def get_pending_approvals(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, PayrollReimbursementPermissions.APPROVE, "view pending approvals")
+    _require_any_permission(
+        db, current_user,
+        [PayrollReimbursementPermissions.READ, PayrollReimbursementPermissions.APPROVE],
+        "view pending approvals"
+    )
     org_id = _get_org_id(current_user)
     
     query = db.query(ReimbursementClaim).filter(
@@ -341,7 +366,7 @@ def get_claim(
         raise HTTPException(status_code=404, detail="Claim not found")
         
     # Access enforcement
-    is_admin = isinstance(current_user, Organization) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.APPROVE)
+    is_admin = isinstance(current_user, Organization) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.APPROVE) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.READ)
     if not is_admin and claim.employee_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
         
@@ -492,7 +517,7 @@ def get_employee_reimbursements(
         raise HTTPException(status_code=404, detail="Employee not found")
         
     # Access enforcement: Employees can ONLY view their own records
-    is_admin = isinstance(current_user, Organization) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.APPROVE)
+    is_admin = isinstance(current_user, Organization) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.APPROVE) or deps.has_permission(db, current_user, PayrollReimbursementPermissions.READ)
     if not is_admin and emp.id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
         

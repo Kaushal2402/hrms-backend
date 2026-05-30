@@ -317,6 +317,7 @@ class PayrollLoanPermissions:
     READ   = "116"
     CREATE = "117"
     APPROVE= "118"
+    UPDATE = "117"
 
 
 class PayrollReimbursementPermissions:
@@ -379,3 +380,63 @@ class PayrollBankAccountsPermissions:
     CREATE = "142"
     UPDATE = "143"
     DELETE = "144"
+
+
+# ---------------------------------------------------------------------------
+# PERFORMANCE MANAGEMENT MODULE (201–230)
+# ---------------------------------------------------------------------------
+class PerformanceGoalFrameworkPermissions:
+    READ   = "201"
+    CREATE = "202"
+    UPDATE = "203"
+    DELETE = "204"
+
+
+class PerformanceGoalPermissions:
+    READ   = "205"
+    CREATE = "206"
+    UPDATE = "207"
+    DELETE = "208"
+
+
+class PerformanceAppraisalCyclePermissions:
+    READ   = "209"
+    CREATE = "210"
+    UPDATE = "211"
+    DELETE = "212"
+
+
+class PerformanceAppraisalPermissions:
+    READ    = "213"
+    UPDATE  = "214"
+    APPROVE = "215"
+
+
+class PerformanceFeedbackPermissions:
+    READ   = "216"
+    CREATE = "217"
+    SUBMIT = "218"
+
+
+class PerformanceCompetencyPermissions:
+    READ   = "219"
+    CREATE = "220"
+    UPDATE = "221"
+
+
+class PerformanceOneOnOnePermissions:
+    READ   = "222"
+    CREATE = "223"
+
+
+class PerformancePipPermissions:
+    READ   = "224"
+    CREATE = "225"
+    UPDATE = "226"
+
+
+class PerformanceTalentPermissions:
+    READ   = "227"
+    CREATE = "228"
+    UPDATE = "229"
+

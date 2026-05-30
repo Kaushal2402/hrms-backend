@@ -1,0 +1,54 @@
+{
+  "verdict": "PASS",
+  "overall_score": 8.8,
+  "scores": {
+    "pattern_consistency": 9,
+    "multi_tenancy": 10,
+    "uuid_path_params": 10,
+    "pagination_correct": 10,
+    "schema_config": 10,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 10,
+    "rbac_enforced": 10,
+    "business_rules": 9,
+    "error_handling": 8,
+    "completeness": 8,
+    "advanced_listing": 1
+  },
+  "issues": [
+    {
+      "severity": "MINOR",
+      "file": "app/api/v1/endpoints/performance_goal_frameworks.py",
+      "line_hint": "get_goal_frameworks",
+      "issue": "The list endpoint lacks sorting capabilities (e.g., order_by), which is standard for production list views.",
+      "fix": "Add an optional 'sort_by' query parameter and implement dynamic ordering using SQLAlchemy's .order_by() method."
+    },
+    {
+      "severity": "MINOR",
+      "file": "app/api/v1/endpoints/performance_goal_frameworks.py",
+      "line_hint": "create_goal_framework",
+      "issue": "Hardcoded '0' for created_by when the user is an Organization object is a potential foreign key violation or logic error.",
+      "fix": "Ensure the database schema allows NULL for created_by or implement a system-user ID constant."
+    },
+    {
+      "severity": "MINOR",
+      "file": "app/api/v1/endpoints/performance_goal_frameworks.py",
+      "line_hint": "update_goal_framework",
+      "issue": "The update logic does not prevent updating the 'is_default' field via the general update endpoint, which could bypass the business logic in set_default_framework.",
+      "fix": "Exclude 'is_default' from the GoalFrameworkUpdate schema or explicitly pop it from the dictionary before updating."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Always implement sorting (order_by) in list endpoints to ensure consistent UI behavior.",
+    "Consider using a service layer or repository pattern to encapsulate complex business logic like the 'set default' transaction.",
+    "Use Pydantic's 'exclude' parameter in model_dump() to prevent mass-assignment of sensitive fields like 'is_default' or 'organization_id'."
+  ],
+  "passed_checks": [
+    "Strict multi-tenancy enforcement via organization_id filtering",
+    "Correct usage of UUID path parameters",
+    "Proper implementation of pagination logic",
+    "Consistent use of Pydantic schemas and from_attributes",
+    "Correct RBAC permission checks on all endpoints",
+    "Successful implementation of the 'set default' business rule"
+  ]
+}

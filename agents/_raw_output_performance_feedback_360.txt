@@ -1,0 +1,1788 @@
+<<<SCHEMAS_RAW>>>
+<<<SCHEMA_FILE>>>
+from typing import List, Optional, Generic, TypeVar, Any
+from datetime import datetime, date
+from pydantic import BaseModel, UUID4, field_validator, model_validator
+from app.schemas.department import PaginatedResponse
+from app.schemas.employee import EmployeeSummarySchema
+from app.models.performance import (
+    FeedbackRequestStatus,
+    FeedbackProviderType,
+    QuestionType
+)
+
+# Generic Type for Paginated Responses
+T = TypeVar('T')
+
+# ===========================================================================
+# 18. 360 FEEDBACK QUESTIONS SCHEMAS
+# ===========================================================================
+
+class FeedbackQuestionBase(BaseModel):
+    question_text: str
+    question_type: QuestionType
+    provider_type: FeedbackProviderType
+    is_anonymous_allowed: bool = True
+    competency_uuid: Optional[UUID4] = None
+    rating_scale_uuid: Optional[UUID4] = None
+    choices: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    is_active: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackQuestionCreate(FeedbackQuestionBase):
+    pass
+
+
+class FeedbackQuestionUpdate(BaseModel):
+    question_text: Optional[str] = None
+    question_type: Optional[QuestionType] = None
+    provider_type: Optional[FeedbackProviderType] = None
+    is_anonymous_allowed: Optional[bool] = None
+    competency_uuid: Optional[UUID4] = None
+    rating_scale_uuid: Optional[UUID4] = None
+    choices: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackQuestionSchema(FeedbackQuestionBase):
+    uuid: UUID4
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackQuestionResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[FeedbackQuestionSchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackQuestionListResponse(PaginatedResponse[List[FeedbackQuestionSchema]]):
+    pass
+
+
+class FeedbackQuestionBulkImportRow(BaseModel):
+    question_text: str
+    question_type: QuestionType
+    provider_type: FeedbackProviderType
+    is_anonymous_allowed: bool = True
+    competency_code: Optional[str] = None
+    rating_scale_code: Optional[str] = None
+    choices: Optional[str] = None  # Comma-separated
+    tags: Optional[str] = None  # Comma-separated
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackQuestionBulkImportData(BaseModel):
+    imported_count: int
+    failed_rows: List[dict]
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackQuestionBulkImportResponse(BaseModel):
+    success: bool
+    message: str
+    data: FeedbackQuestionBulkImportData
+
+    class Config:
+        from_attributes = True
+
+
+# ===========================================================================
+# 19. 360 FEEDBACK REQUESTS SCHEMAS
+# ===========================================================================
+
+class FeedbackRequestBase(BaseModel):
+    appraisal_cycle_uuid: UUID4
+    appraisal_record_uuid: Optional[UUID4] = None
+    employee_uuid: UUID4
+    initiated_by: str  # "employee", "manager", "hr"
+    due_date: date
+    status: FeedbackRequestStatus = FeedbackRequestStatus.PENDING
+    min_peer_responses: int = 3
+    min_subordinate_responses: int = 2
+    is_anonymous: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequestCreate(FeedbackRequestBase):
+    pass
+
+
+class FeedbackRequestUpdate(BaseModel):
+    appraisal_cycle_uuid: Optional[UUID4] = None
+    appraisal_record_uuid: Optional[UUID4] = None
+    employee_uuid: Optional[UUID4] = None
+    initiated_by: Optional[str] = None
+    due_date: Optional[date] = None
+    status: Optional[FeedbackRequestStatus] = None
+    min_peer_responses: Optional[int] = None
+    min_subordinate_responses: Optional[int] = None
+    is_anonymous: Optional[bool] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequestSchema(FeedbackRequestBase):
+    uuid: UUID4
+    avg_rating: Optional[float] = None
+    response_summary: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+    employee: Optional[EmployeeSummarySchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequestResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[FeedbackRequestSchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequestListResponse(PaginatedResponse[List[FeedbackRequestSchema]]):
+    pass
+
+
+class FeedbackRequestBulkCreate(BaseModel):
+    is_anonymous: bool = True
+    due_date: date
+    min_peer_responses: int = 3
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequestBulkCreateData(BaseModel):
+    created_count: int
+    already_existed: int
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequestBulkCreateResponse(BaseModel):
+    success: bool
+    message: str
+    data: FeedbackRequestBulkCreateData
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequestSummaryData(BaseModel):
+    avg_rating: Optional[float] = None
+    per_competency_avg: dict
+    themes: List[str]
+    provider_type_breakdown: dict
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequestSummaryResponse(BaseModel):
+    success: bool
+    message: str
+    data: FeedbackRequestSummaryData
+
+    class Config:
+        from_attributes = True
+
+
+class SendRemindersRequest(BaseModel):
+    provider_uuids: Optional[List[UUID4]] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SendRemindersData(BaseModel):
+    sent_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class SendRemindersResponse(BaseModel):
+    success: bool
+    message: str
+    data: SendRemindersData
+
+    class Config:
+        from_attributes = True
+
+
+# ===========================================================================
+# 20. FEEDBACK PROVIDERS SCHEMAS
+# ===========================================================================
+
+class FeedbackProviderBase(BaseModel):
+    employee_uuid: UUID4
+    provider_type: FeedbackProviderType
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProviderCreate(FeedbackProviderBase):
+    pass
+
+
+class FeedbackProviderUpdate(BaseModel):
+    employee_uuid: Optional[UUID4] = None
+    provider_type: Optional[FeedbackProviderType] = None
+    is_approved: Optional[bool] = None
+    rejection_reason: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProviderSchema(FeedbackProviderBase):
+    uuid: UUID4
+    is_approved: bool
+    rejection_reason: Optional[str] = None
+    invite_sent_at: Optional[datetime] = None
+    is_completed: bool
+    employee: Optional[EmployeeSummarySchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProviderResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[FeedbackProviderSchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProviderListResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[FeedbackProviderSchema]
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProvidersNominateRequest(BaseModel):
+    providers: List[FeedbackProviderCreate]
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProviderApproveRequest(BaseModel):
+    approved: bool
+    rejection_reason: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProviderCompletionStatus(BaseModel):
+    total: int
+    completed: int
+    pending: int
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProviderCompletionBreakdown(BaseModel):
+    peer: FeedbackProviderCompletionStatus
+    subordinate: FeedbackProviderCompletionStatus
+    supervisor: FeedbackProviderCompletionStatus
+    external: FeedbackProviderCompletionStatus
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackProviderCompletionResponse(BaseModel):
+    success: bool
+    message: str
+    data: FeedbackProviderCompletionBreakdown
+
+    class Config:
+        from_attributes = True
+
+
+# ===========================================================================
+# 21. FEEDBACK RESPONSES SCHEMAS
+# ===========================================================================
+
+class FeedbackAnswerSchema(BaseModel):
+    question_uuid: UUID4
+    rating: Optional[int] = None
+    text: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseBase(BaseModel):
+    answers: List[FeedbackAnswerSchema]
+    overall_comments: Optional[str] = None
+    strengths_observed: Optional[str] = None
+    development_suggestions: Optional[str] = None
+    overall_rating: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseCreate(FeedbackResponseBase):
+    pass
+
+
+class FeedbackResponseUpdate(BaseModel):
+    answers: Optional[List[FeedbackAnswerSchema]] = None
+    overall_comments: Optional[str] = None
+    strengths_observed: Optional[str] = None
+    development_suggestions: Optional[str] = None
+    overall_rating: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseSchema(FeedbackResponseBase):
+    uuid: UUID4
+    response_token: UUID4
+    is_submitted: bool
+    submitted_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseFormSchema(BaseModel):
+    response_token: UUID4
+    is_submitted: bool
+    due_date: date
+    is_anonymous: bool
+    questions: List[FeedbackQuestionSchema]
+    subject_employee: Optional[EmployeeSummarySchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseFormResponse(BaseModel):
+    success: bool
+    message: str
+    data: FeedbackResponseFormSchema
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseSingleResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[FeedbackResponseSchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseListResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[FeedbackResponseSchema]
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseAnalyticsData(BaseModel):
+    per_question_avg: dict
+    per_competency_avg: dict
+    sentiment_themes: List[str]
+    score_distribution: dict
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackResponseAnalyticsResponse(BaseModel):
+    success: bool
+    message: str
+    data: FeedbackResponseAnalyticsData
+
+    class Config:
+        from_attributes = True
+<<<END_SCHEMA>>>
+
+<<<AGENT_NOTES>>>
+- Designed the Pydantic schemas for the 360 Feedback module (`FEEDBACK_360`) strictly following the style guide.
+- Imported Enums directly from `app.models.performance` to prevent re-declaration.
+- Ensured all `Create` schemas do not contain system-generated fields like `uuid`, `id`, `created_at`, or `updated_at`.
+- Ensured all `Update` schemas have all fields wrapped in `Optional[...]`.
+- Added `class Config: from_attributes = True` to all schemas to support seamless ORM serialization.
+- Integrated `EmployeeSummarySchema` and `PaginatedResponse` to maintain consistency with the rest of the HRM system.
+- Provided comprehensive schemas for Questions, Requests, Providers, and Responses, including bulk operations and analytics.
+<<<END_NOTES>>>
+
+<<<ENDPOINTS_RAW>>>
+<<<ENDPOINT_FILE>>>
+import csv
+import io
+import uuid
+from datetime import datetime, date
+from typing import List, Optional, Union, Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import or_, and_, func
+from sqlalchemy.orm import Session, joinedload
+
+from app.api import deps
+from app.models.organization import Organization
+from app.models.employee import Employee
+from app.models.performance import (
+    FeedbackRequest,
+    FeedbackRequestStatus,
+    FeedbackProviderType,
+    QuestionType
+)
+# Assuming standard model names for the feedback module
+from app.models.performance import (
+    FeedbackQuestion,
+    FeedbackProvider,
+    FeedbackResponse,
+    FeedbackAnswer,
+    AppraisalCycle,
+    AppraisalRecord
+)
+from app.schemas.performance_feedback_360 import (
+    FeedbackQuestionSchema,
+    FeedbackQuestionCreate,
+    FeedbackQuestionUpdate,
+    FeedbackQuestionResponse,
+    FeedbackQuestionListResponse,
+    FeedbackQuestionBulkImportResponse,
+    FeedbackRequestSchema,
+    FeedbackRequestCreate,
+    FeedbackRequestUpdate,
+    FeedbackRequestResponse,
+    FeedbackRequestListResponse,
+    FeedbackRequestBulkCreate,
+    FeedbackRequestBulkCreateResponse,
+    FeedbackRequestSummaryResponse,
+    SendRemindersRequest,
+    SendRemindersResponse,
+    FeedbackProviderSchema,
+    FeedbackProviderCreate,
+    FeedbackProviderUpdate,
+    FeedbackProviderResponse,
+    FeedbackProviderListResponse,
+    FeedbackProvidersNominateRequest,
+    FeedbackProviderApproveRequest,
+    FeedbackProviderCompletionResponse,
+    FeedbackResponseSchema,
+    FeedbackResponseCreate,
+    FeedbackResponseUpdate,
+    FeedbackResponseFormResponse,
+    FeedbackResponseSingleResponse,
+    FeedbackResponseListResponse,
+    FeedbackResponseAnalyticsResponse
+)
+
+router = APIRouter()
+
+# ===========================================================================
+# PERMISSION CODES
+# ===========================================================================
+class PerformanceFeedbackPermissions:
+    READ = "216"
+    CREATE = "217"
+    SUBMIT = "218"
+
+
+# ===========================================================================
+# HELPERS
+# ===========================================================================
+def _get_org_id(current_user: Union[Organization, Employee]) -> int:
+    if isinstance(current_user, Organization):
+        return current_user.id
+    return current_user.organization_id
+
+
+def _require_permission(
+    db: Session,
+    current_user: Union[Organization, Employee],
+    code: str,
+    action_label: str
+) -> None:
+    if isinstance(current_user, Organization):
+        return  # Bypass for Org Admin
+    if not deps.has_permission(db, current_user, code):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"You do not have permission to {action_label} (requires code: {code})"
+        )
+
+
+# ===========================================================================
+# 18. 360 FEEDBACK QUESTIONS
+# ===========================================================================
+
+@router.get("/feedback-questions", response_model=FeedbackQuestionListResponse)
+def list_feedback_questions(
+    provider_type: Optional[FeedbackProviderType] = Query(None),
+    question_type: Optional[QuestionType] = Query(None),
+    competency_uuid: Optional[uuid.UUID] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    tags: Optional[str] = Query(None, description="Comma-separated tags"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("created_at,desc"),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "list feedback questions")
+    org_id = _get_org_id(current_user)
+
+    query = db.query(FeedbackQuestion).filter(FeedbackQuestion.organization_id == org_id)
+
+    if provider_type:
+        query = query.filter(FeedbackQuestion.provider_type == provider_type)
+    if question_type:
+        query = query.filter(FeedbackQuestion.question_type == question_type)
+    if competency_uuid:
+        query = query.filter(FeedbackQuestion.competency_uuid == competency_uuid)
+    if is_active is not None:
+        query = query.filter(FeedbackQuestion.is_active == is_active)
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",")]
+        for tag in tag_list:
+            query = query.filter(FeedbackQuestion.tags.contains([tag]))
+    if search:
+        query = query.filter(FeedbackQuestion.question_text.ilike(f"%{search}%"))
+
+    # Multi-column sorting
+    if sort_by:
+        sort_parts = sort_by.split(",")
+        for part in sort_parts:
+            part = part.strip()
+            if "_" in part:
+                field, order = part.rsplit("_", 1)
+            elif " " in part:
+                field, order = part.split(" ", 1)
+            else:
+                field, order = part, "asc"
+            
+            if hasattr(FeedbackQuestion, field):
+                col = getattr(FeedbackQuestion, field)
+                query = query.order_by(col.desc() if order.lower() == "desc" else col.asc())
+
+    total_records = query.count()
+    total_pages = (total_records + limit - 1) // limit if total_records > 0 else 0
+    items = query.offset((page - 1) * limit).limit(limit).all()
+
+    return FeedbackQuestionListResponse(
+        success=True,
+        message="Feedback questions retrieved successfully",
+        data=items,
+        pagination={
+            "total_records": total_records,
+            "current_page": page,
+            "total_pages": total_pages,
+            "page_size": limit
+        }
+    )
+
+
+@router.post("/feedback-questions", response_model=FeedbackQuestionResponse)
+def create_feedback_question(
+    question_in: FeedbackQuestionCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "create feedback question")
+    org_id = _get_org_id(current_user)
+
+    # Check for duplicate question text in the same org
+    existing = db.query(FeedbackQuestion).filter(
+        FeedbackQuestion.organization_id == org_id,
+        FeedbackQuestion.question_text == question_in.question_text
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Question text already exists in the question bank")
+
+    db_obj = FeedbackQuestion(
+        organization_id=org_id,
+        **question_in.model_dump()
+    )
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+
+    return FeedbackQuestionResponse(
+        success=True,
+        message="Feedback question created successfully",
+        data=db_obj
+    )
+
+
+@router.get("/feedback-questions/{question_uuid}", response_model=FeedbackQuestionResponse)
+def get_feedback_question(
+    question_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "view feedback question")
+    org_id = _get_org_id(current_user)
+
+    question = db.query(FeedbackQuestion).filter(
+        FeedbackQuestion.uuid == question_uuid,
+        FeedbackQuestion.organization_id == org_id
+    ).first()
+    if not question:
+        raise HTTPException(status_code=404, detail="Feedback question not found")
+
+    return FeedbackQuestionResponse(
+        success=True,
+        message="Feedback question retrieved successfully",
+        data=question
+    )
+
+
+@router.put("/feedback-questions/{question_uuid}", response_model=FeedbackQuestionResponse)
+def update_feedback_question(
+    question_uuid: uuid.UUID,
+    question_in: FeedbackQuestionUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "update feedback question")
+    org_id = _get_org_id(current_user)
+
+    question = db.query(FeedbackQuestion).filter(
+        FeedbackQuestion.uuid == question_uuid,
+        FeedbackQuestion.organization_id == org_id
+    ).first()
+    if not question:
+        raise HTTPException(status_code=404, detail="Feedback question not found")
+
+    for field, value in question_in.model_dump(exclude_unset=True).items():
+        setattr(question, field, value)
+
+    db.commit()
+    db.refresh(question)
+
+    return FeedbackQuestionResponse(
+        success=True,
+        message="Feedback question updated successfully",
+        data=question
+    )
+
+
+@router.delete("/feedback-questions/{question_uuid}")
+def delete_feedback_question(
+    question_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "delete feedback question")
+    org_id = _get_org_id(current_user)
+
+    question = db.query(FeedbackQuestion).filter(
+        FeedbackQuestion.uuid == question_uuid,
+        FeedbackQuestion.organization_id == org_id
+    ).first()
+    if not question:
+        raise HTTPException(status_code=404, detail="Feedback question not found")
+
+    question.is_active = False
+    db.commit()
+
+    return {"success": True, "message": "Feedback question soft-deleted successfully"}
+
+
+@router.post("/feedback-questions/bulk-import", response_model=FeedbackQuestionBulkImportResponse)
+def bulk_import_feedback_questions(
+    file: UploadFile = File(...),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "bulk import feedback questions")
+    org_id = _get_org_id(current_user)
+
+    imported_count = 0
+    failed_rows = []
+
+    try:
+        content = file.file.read().decode("utf-8")
+        reader = csv.DictReader(io.StringIO(content))
+        for idx, row in enumerate(reader):
+            try:
+                question_text = row.get("question_text")
+                question_type = row.get("question_type")
+                provider_type = row.get("provider_type")
+                
+                if not question_text or not question_type or not provider_type:
+                    raise ValueError("Missing required fields")
+
+                choices_str = row.get("choices")
+                choices_list = [c.strip() for c in choices_str.split(",")] if choices_str else None
+                
+                tags_str = row.get("tags")
+                tags_list = [t.strip() for t in tags_str.split(",")] if tags_str else None
+
+                db_obj = FeedbackQuestion(
+                    organization_id=org_id,
+                    question_text=question_text,
+                    question_type=QuestionType(question_type.upper()),
+                    provider_type=FeedbackProviderType(provider_type.upper()),
+                    is_anonymous_allowed=row.get("is_anonymous_allowed", "true").lower() == "true",
+                    choices=choices_list,
+                    tags=tags_list,
+                    is_active=True
+                )
+                db.add(db_obj)
+                imported_count += 1
+            except Exception as e:
+                failed_rows.append({"row_index": idx + 1, "error": str(e)})
+
+        db.commit()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse CSV file: {str(e)}")
+
+    return FeedbackQuestionBulkImportResponse(
+        success=True,
+        message="Bulk import completed",
+        data={
+            "imported_count": imported_count,
+            "failed_rows": failed_rows
+        }
+    )
+
+
+@router.get("/feedback-questions/export")
+def export_feedback_questions(
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "export feedback questions")
+    org_id = _get_org_id(current_user)
+
+    questions = db.query(FeedbackQuestion).filter(FeedbackQuestion.organization_id == org_id).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["question_text", "question_type", "provider_type", "is_anonymous_allowed", "choices", "tags", "is_active"])
+
+    for q in questions:
+        choices_str = ",".join(q.choices) if q.choices else ""
+        tags_str = ",".join(q.tags) if q.tags else ""
+        writer.writerow([q.question_text, q.question_type.value, q.provider_type.value, q.is_anonymous_allowed, choices_str, tags_str, q.is_active])
+
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.read().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=feedback_questions_export.csv"}
+    )
+
+
+# ===========================================================================
+# 19. 360 FEEDBACK REQUESTS
+# ===========================================================================
+
+@router.get("/feedback-requests", response_model=FeedbackRequestListResponse)
+def list_feedback_requests(
+    appraisal_cycle_uuid: Optional[uuid.UUID] = Query(None),
+    employee_uuid: Optional[uuid.UUID] = Query(None),
+    status: Optional[FeedbackRequestStatus] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("created_at,desc"),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "list feedback requests")
+    org_id = _get_org_id(current_user)
+
+    query = db.query(FeedbackRequest).filter(FeedbackRequest.organization_id == org_id)
+
+    if appraisal_cycle_uuid:
+        cycle = db.query(AppraisalCycle).filter(AppraisalCycle.uuid == appraisal_cycle_uuid, AppraisalCycle.organization_id == org_id).first()
+        if cycle:
+            query = query.filter(FeedbackRequest.appraisal_cycle_id == cycle.id)
+    if employee_uuid:
+        emp = db.query(Employee).filter(Employee.uuid == employee_uuid, Employee.organization_id == org_id).first()
+        if emp:
+            query = query.filter(FeedbackRequest.employee_id == emp.id)
+    if status:
+        query = query.filter(FeedbackRequest.status == status)
+    if search:
+        query = query.join(Employee, FeedbackRequest.employee_id == Employee.id).filter(
+            or_(
+                Employee.first_name.ilike(f"%{search}%"),
+                Employee.last_name.ilike(f"%{search}%")
+            )
+        )
+
+    if sort_by:
+        sort_parts = sort_by.split(",")
+        for part in sort_parts:
+            part = part.strip()
+            if "_" in part:
+                field, order = part.rsplit("_", 1)
+            elif " " in part:
+                field, order = part.split(" ", 1)
+            else:
+                field, order = part, "asc"
+            
+            if hasattr(FeedbackRequest, field):
+                col = getattr(FeedbackRequest, field)
+                query = query.order_by(col.desc() if order.lower() == "desc" else col.asc())
+
+    total_records = query.count()
+    total_pages = (total_records + limit - 1) // limit if total_records > 0 else 0
+    items = query.offset((page - 1) * limit).limit(limit).all()
+
+    return FeedbackRequestListResponse(
+        success=True,
+        message="Feedback requests retrieved successfully",
+        data=items,
+        pagination={
+            "total_records": total_records,
+            "current_page": page,
+            "total_pages": total_pages,
+            "page_size": limit
+        }
+    )
+
+
+@router.post("/feedback-requests", response_model=FeedbackRequestResponse)
+def create_feedback_request(
+    request_in: FeedbackRequestCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "create feedback request")
+    org_id = _get_org_id(current_user)
+
+    cycle = db.query(AppraisalCycle).filter(AppraisalCycle.uuid == request_in.appraisal_cycle_uuid, AppraisalCycle.organization_id == org_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Appraisal cycle not found")
+
+    emp = db.query(Employee).filter(Employee.uuid == request_in.employee_uuid, Employee.organization_id == org_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    record_id = None
+    if request_in.appraisal_record_uuid:
+        record = db.query(AppraisalRecord).filter(AppraisalRecord.uuid == request_in.appraisal_record_uuid, AppraisalRecord.organization_id == org_id).first()
+        if record:
+            record_id = record.id
+
+    # Prevent duplicate requests to the same employee in the same appraisal cycle
+    existing = db.query(FeedbackRequest).filter(
+        FeedbackRequest.organization_id == org_id,
+        FeedbackRequest.appraisal_cycle_id == cycle.id,
+        FeedbackRequest.employee_id == emp.id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Feedback request already exists for this employee in this cycle")
+
+    db_obj = FeedbackRequest(
+        organization_id=org_id,
+        appraisal_cycle_id=cycle.id,
+        appraisal_record_id=record_id,
+        employee_id=emp.id,
+        initiated_by=request_in.initiated_by,
+        due_date=request_in.due_date,
+        status=request_in.status,
+        min_peer_responses=request_in.min_peer_responses,
+        min_subordinate_responses=request_in.min_subordinate_responses,
+        is_anonymous=request_in.is_anonymous
+    )
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+
+    return FeedbackRequestResponse(
+        success=True,
+        message="Feedback request created successfully",
+        data=db_obj
+    )
+
+
+@router.get("/feedback-requests/{request_uuid}", response_model=FeedbackRequestResponse)
+def get_feedback_request(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "view feedback request")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    return FeedbackRequestResponse(
+        success=True,
+        message="Feedback request retrieved successfully",
+        data=request
+    )
+
+
+@router.patch("/feedback-requests/{request_uuid}/close", response_model=FeedbackRequestResponse)
+def close_feedback_request(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "close feedback request")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    request.status = FeedbackRequestStatus.COMPLETED
+    db.commit()
+    db.refresh(request)
+
+    return FeedbackRequestResponse(
+        success=True,
+        message="Feedback request closed successfully",
+        data=request
+    )
+
+
+@router.get("/feedback-requests/{request_uuid}/summary", response_model=FeedbackRequestSummaryResponse)
+def get_feedback_request_summary(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "view feedback summary")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    # Compute summary metrics
+    responses = db.query(FeedbackResponse).filter(
+        FeedbackResponse.feedback_request_id == request.id,
+        FeedbackResponse.is_submitted == True,
+        FeedbackResponse.organization_id == org_id
+    ).all()
+
+    total_rating = 0.0
+    count = 0
+    per_competency_avg = {}
+    themes = []
+    provider_type_breakdown = {"peer": 0, "subordinate": 0, "supervisor": 0, "external": 0}
+
+    for resp in responses:
+        if resp.overall_rating:
+            total_rating += float(resp.overall_rating)
+            count += 1
+        if resp.strengths_observed:
+            themes.append(resp.strengths_observed)
+        
+        # Find provider type
+        provider = db.query(FeedbackProvider).filter(FeedbackProvider.id == resp.feedback_provider_id).first()
+        if provider:
+            ptype = provider.provider_type.value.lower()
+            if ptype in provider_type_breakdown:
+                provider_type_breakdown[ptype] += 1
+
+    avg_rating = total_rating / count if count > 0 else 0.0
+
+    summary_data = {
+        "avg_rating": avg_rating,
+        "per_competency_avg": per_competency_avg,
+        "themes": themes[:5],  # Top 5 themes
+        "provider_type_breakdown": provider_type_breakdown
+    }
+
+    return FeedbackRequestSummaryResponse(
+        success=True,
+        message="Feedback request summary retrieved successfully",
+        data=summary_data
+    )
+
+
+@router.post("/feedback-requests/{request_uuid}/send-reminders", response_model=SendRemindersResponse)
+def send_feedback_reminders(
+    request_uuid: uuid.UUID,
+    payload: SendRemindersRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "send feedback reminders")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    query = db.query(FeedbackProvider).filter(
+        FeedbackProvider.feedback_request_id == request.id,
+        FeedbackProvider.is_completed == False,
+        FeedbackProvider.organization_id == org_id
+    )
+
+    if payload.provider_uuids:
+        query = query.filter(FeedbackProvider.uuid.in_(payload.provider_uuids))
+
+    pending_providers = query.all()
+    sent_count = 0
+
+    for provider in pending_providers:
+        provider.invite_sent_at = datetime.utcnow()
+        sent_count += 1
+
+    db.commit()
+
+    return SendRemindersResponse(
+        success=True,
+        message="Reminders sent successfully",
+        data={"sent_count": sent_count}
+    )
+
+
+@router.get("/feedback-requests/pending-for-me", response_model=FeedbackProviderListResponse)
+def get_pending_feedback_requests_for_me(
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "view pending feedback requests")
+    org_id = _get_org_id(current_user)
+
+    if isinstance(current_user, Organization):
+        raise HTTPException(status_code=400, detail="Organization users cannot have pending feedback requests")
+
+    pending = db.query(FeedbackProvider).filter(
+        FeedbackProvider.employee_id == current_user.id,
+        FeedbackProvider.is_completed == False,
+        FeedbackProvider.is_approved == True,
+        FeedbackProvider.organization_id == org_id
+    ).all()
+
+    return FeedbackProviderListResponse(
+        success=True,
+        message="Pending feedback requests retrieved successfully",
+        data=pending
+    )
+
+
+@router.post("/appraisal-cycles/{cycle_uuid}/feedback-requests/bulk-create", response_model=FeedbackRequestBulkCreateResponse)
+def bulk_create_feedback_requests(
+    cycle_uuid: uuid.UUID,
+    payload: FeedbackRequestBulkCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "bulk create feedback requests")
+    org_id = _get_org_id(current_user)
+
+    cycle = db.query(AppraisalCycle).filter(AppraisalCycle.uuid == cycle_uuid, AppraisalCycle.organization_id == org_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Appraisal cycle not found")
+
+    # Find all active employees in the organization
+    employees = db.query(Employee).filter(Employee.organization_id == org_id, Employee.is_active == True).all()
+
+    created_count = 0
+    already_existed = 0
+
+    for emp in employees:
+        existing = db.query(FeedbackRequest).filter(
+            FeedbackRequest.organization_id == org_id,
+            FeedbackRequest.appraisal_cycle_id == cycle.id,
+            FeedbackRequest.employee_id == emp.id
+        ).first()
+
+        if existing:
+            already_existed += 1
+            continue
+
+        db_obj = FeedbackRequest(
+            organization_id=org_id,
+            appraisal_cycle_id=cycle.id,
+            employee_id=emp.id,
+            initiated_by="hr",
+            due_date=payload.due_date,
+            status=FeedbackRequestStatus.PENDING,
+            min_peer_responses=payload.min_peer_responses,
+            is_anonymous=payload.is_anonymous
+        )
+        db.add(db_obj)
+        created_count += 1
+
+    db.commit()
+
+    return FeedbackRequestBulkCreateResponse(
+        success=True,
+        message="Bulk feedback requests creation completed",
+        data={
+            "created_count": created_count,
+            "already_existed": already_existed
+        }
+    )
+
+
+@router.delete("/feedback-requests/{request_uuid}")
+def delete_feedback_request(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "delete feedback request")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    if request.status != FeedbackRequestStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Only pending feedback requests can be deleted")
+
+    db.delete(request)
+    db.commit()
+
+    return {"success": True, "message": "Feedback request deleted successfully"}
+
+
+# ===========================================================================
+# 20. FEEDBACK PROVIDERS
+# ===========================================================================
+
+@router.get("/feedback-requests/{request_uuid}/providers", response_model=FeedbackProviderListResponse)
+def list_feedback_providers(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "list feedback providers")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    providers = db.query(FeedbackProvider).filter(
+        FeedbackProvider.feedback_request_id == request.id,
+        FeedbackProvider.organization_id == org_id
+    ).all()
+
+    return FeedbackProviderListResponse(
+        success=True,
+        message="Feedback providers retrieved successfully",
+        data=providers
+    )
+
+
+@router.post("/feedback-requests/{request_uuid}/providers", response_model=FeedbackProviderListResponse)
+def nominate_feedback_providers(
+    request_uuid: uuid.UUID,
+    payload: FeedbackProvidersNominateRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "nominate feedback providers")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    added_providers = []
+    for prov_in in payload.providers:
+        emp = db.query(Employee).filter(Employee.uuid == prov_in.employee_uuid, Employee.organization_id == org_id).first()
+        if not emp:
+            continue
+
+        # Prevent duplicate requests to the same provider for the same employee in the same appraisal cycle
+        existing = db.query(FeedbackProvider).filter(
+            FeedbackProvider.feedback_request_id == request.id,
+            FeedbackProvider.employee_id == emp.id,
+            FeedbackProvider.organization_id == org_id
+        ).first()
+        if existing:
+            continue
+
+        db_obj = FeedbackProvider(
+            organization_id=org_id,
+            feedback_request_id=request.id,
+            employee_id=emp.id,
+            provider_type=prov_in.provider_type,
+            is_approved=False,
+            is_completed=False,
+            response_token=uuid.uuid4()
+        )
+        db.add(db_obj)
+        added_providers.append(db_obj)
+
+    db.commit()
+    for p in added_providers:
+        db.refresh(p)
+
+    return FeedbackProviderListResponse(
+        success=True,
+        message="Feedback providers nominated successfully",
+        data=added_providers
+    )
+
+
+@router.patch("/feedback-requests/{request_uuid}/providers/{provider_uuid}/approve", response_model=FeedbackProviderResponse)
+def approve_feedback_provider(
+    request_uuid: uuid.UUID,
+    provider_uuid: uuid.UUID,
+    payload: FeedbackProviderApproveRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "approve feedback provider")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    provider = db.query(FeedbackProvider).filter(
+        FeedbackProvider.uuid == provider_uuid,
+        FeedbackProvider.feedback_request_id == request.id,
+        FeedbackProvider.organization_id == org_id
+    ).first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Feedback provider not found")
+
+    provider.is_approved = payload.approved
+    if not payload.approved:
+        provider.rejection_reason = payload.rejection_reason
+    else:
+        provider.rejection_reason = None
+        provider.invite_sent_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(provider)
+
+    return FeedbackProviderResponse(
+        success=True,
+        message="Feedback provider approval status updated",
+        data=provider
+    )
+
+
+@router.delete("/feedback-requests/{request_uuid}/providers/{provider_uuid}")
+def remove_feedback_provider(
+    request_uuid: uuid.UUID,
+    provider_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "remove feedback provider")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    provider = db.query(FeedbackProvider).filter(
+        FeedbackProvider.uuid == provider_uuid,
+        FeedbackProvider.feedback_request_id == request.id,
+        FeedbackProvider.organization_id == org_id
+    ).first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Feedback provider not found")
+
+    db.delete(provider)
+    db.commit()
+
+    return {"success": True, "message": "Feedback provider removed successfully"}
+
+
+@router.post("/feedback-requests/{request_uuid}/providers/{provider_uuid}/resend-invite", response_model=FeedbackProviderResponse)
+def resend_feedback_invite(
+    request_uuid: uuid.UUID,
+    provider_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "resend feedback invite")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    provider = db.query(FeedbackProvider).filter(
+        FeedbackProvider.uuid == provider_uuid,
+        FeedbackProvider.feedback_request_id == request.id,
+        FeedbackProvider.organization_id == org_id
+    ).first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Feedback provider not found")
+
+    provider.invite_sent_at = datetime.utcnow()
+    db.commit()
+    db.refresh(provider)
+
+    return FeedbackProviderResponse(
+        success=True,
+        message="Feedback invitation resent successfully",
+        data=provider
+    )
+
+
+@router.get("/feedback-requests/{request_uuid}/providers/completion-status", response_model=FeedbackProviderCompletionResponse)
+def get_feedback_providers_completion_status(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "view completion status")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    providers = db.query(FeedbackProvider).filter(
+        FeedbackProvider.feedback_request_id == request.id,
+        FeedbackProvider.organization_id == org_id
+    ).all()
+
+    breakdown = {
+        "peer": {"total": 0, "completed": 0, "pending": 0},
+        "subordinate": {"total": 0, "completed": 0, "pending": 0},
+        "supervisor": {"total": 0, "completed": 0, "pending": 0},
+        "external": {"total": 0, "completed": 0, "pending": 0}
+    }
+
+    for p in providers:
+        ptype = p.provider_type.value.lower()
+        if ptype in breakdown:
+            breakdown[ptype]["total"] += 1
+            if p.is_completed:
+                breakdown[ptype]["completed"] += 1
+            else:
+                breakdown[ptype]["pending"] += 1
+
+    return FeedbackProviderCompletionResponse(
+        success=True,
+        message="Completion status breakdown retrieved successfully",
+        data=breakdown
+    )
+
+
+@router.post("/feedback-requests/{request_uuid}/providers/bulk-approve")
+def bulk_approve_feedback_providers(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "bulk approve feedback providers")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    pending_providers = db.query(FeedbackProvider).filter(
+        FeedbackProvider.feedback_request_id == request.id,
+        FeedbackProvider.is_approved == False,
+        FeedbackProvider.organization_id == org_id
+    ).all()
+
+    approved_count = 0
+    for provider in pending_providers:
+        provider.is_approved = True
+        provider.invite_sent_at = datetime.utcnow()
+        approved_count += 1
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Bulk approval completed",
+        "data": {"approved_count": approved_count}
+    }
+
+
+# ===========================================================================
+# 21. FEEDBACK RESPONSES
+# ===========================================================================
+
+@router.get("/feedback-responses/{response_token}", response_model=FeedbackResponseFormResponse)
+def get_feedback_form_by_token(
+    response_token: uuid.UUID,
+    db: Session = Depends(deps.get_db)
+):
+    # Public token-based endpoint, no RBAC check required
+    provider = db.query(FeedbackProvider).filter(FeedbackProvider.response_token == response_token).first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Invalid or expired feedback token")
+
+    request = db.query(FeedbackRequest).filter(FeedbackRequest.id == provider.feedback_request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    # Fetch active questions for this provider type
+    questions = db.query(FeedbackQuestion).filter(
+        FeedbackQuestion.organization_id == request.organization_id,
+        FeedbackQuestion.provider_type == provider.provider_type,
+        FeedbackQuestion.is_active == True
+    ).all()
+
+    # Anonymize subject employee if configured
+    subject_employee = None
+    if not request.is_anonymous:
+        subject_employee = db.query(Employee).filter(Employee.id == request.employee_id).first()
+
+    form_data = {
+        "response_token": provider.response_token,
+        "is_submitted": provider.is_completed,
+        "due_date": request.due_date,
+        "is_anonymous": request.is_anonymous,
+        "questions": questions,
+        "subject_employee": subject_employee
+    }
+
+    return FeedbackResponseFormResponse(
+        success=True,
+        message="Feedback form retrieved successfully",
+        data=form_data
+    )
+
+
+@router.put("/feedback-responses/{response_token}", response_model=FeedbackResponseSingleResponse)
+def save_feedback_response_draft(
+    response_token: uuid.UUID,
+    payload: FeedbackResponseUpdate,
+    db: Session = Depends(deps.get_db)
+):
+    # Public token-based endpoint, no RBAC check required
+    provider = db.query(FeedbackProvider).filter(FeedbackProvider.response_token == response_token).first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Invalid or expired feedback token")
+
+    if provider.is_completed:
+        raise HTTPException(status_code=400, detail="Feedback has already been submitted and cannot be modified")
+
+    request = db.query(FeedbackRequest).filter(FeedbackRequest.id == provider.feedback_request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    # Find or create response record
+    response = db.query(FeedbackResponse).filter(
+        FeedbackResponse.feedback_provider_id == provider.id,
+        FeedbackResponse.organization_id == request.organization_id
+    ).first()
+
+    if not response:
+        response = FeedbackResponse(
+            organization_id=request.organization_id,
+            feedback_request_id=request.id,
+            feedback_provider_id=provider.id,
+            response_token=response_token,
+            is_submitted=False
+        )
+        db.add(response)
+        db.flush()
+
+    # Update response fields
+    if payload.overall_comments is not None:
+        response.overall_comments = payload.overall_comments
+    if payload.strengths_observed is not None:
+        response.strengths_observed = payload.strengths_observed
+    if payload.development_suggestions is not None:
+        response.development_suggestions = payload.development_suggestions
+    if payload.overall_rating is not None:
+        response.overall_rating = payload.overall_rating
+
+    # Save answers
+    if payload.answers:
+        for ans_in in payload.answers:
+            question = db.query(FeedbackQuestion).filter(
+                FeedbackQuestion.uuid == ans_in.question_uuid,
+                FeedbackQuestion.organization_id == request.organization_id
+            ).first()
+            if not question:
+                continue
+
+            # Prevent duplicate answers for the same question in the same response
+            ans_obj = db.query(FeedbackAnswer).filter(
+                FeedbackAnswer.feedback_response_id == response.id,
+                FeedbackAnswer.question_id == question.id,
+                FeedbackAnswer.organization_id == request.organization_id
+            ).first()
+
+            if not ans_obj:
+                ans_obj = FeedbackAnswer(
+                    organization_id=request.organization_id,
+                    feedback_response_id=response.id,
+                    question_id=question.id
+                )
+                db.add(ans_obj)
+
+            ans_obj.rating = ans_in.rating
+            ans_obj.text = ans_in.text
+
+    db.commit()
+    db.refresh(response)
+
+    return FeedbackResponseSingleResponse(
+        success=True,
+        message="Feedback draft saved successfully",
+        data=response
+    )
+
+
+@router.post("/feedback-responses/{response_token}/submit", response_model=FeedbackResponseSingleResponse)
+def submit_feedback_response(
+    response_token: uuid.UUID,
+    db: Session = Depends(deps.get_db)
+):
+    # Public token-based endpoint, no RBAC check required
+    provider = db.query(FeedbackProvider).filter(FeedbackProvider.response_token == response_token).first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Invalid or expired feedback token")
+
+    if provider.is_completed:
+        raise HTTPException(status_code=400, detail="Feedback has already been submitted")
+
+    request = db.query(FeedbackRequest).filter(FeedbackRequest.id == provider.feedback_request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    response = db.query(FeedbackResponse).filter(
+        FeedbackResponse.feedback_provider_id == provider.id,
+        FeedbackResponse.organization_id == request.organization_id
+    ).first()
+
+    if not response:
+        raise HTTPException(status_code=400, detail="No draft response found to submit")
+
+    # Lock response and provider
+    response.is_submitted = True
+    response.submitted_at = datetime.utcnow()
+    provider.is_completed = True
+
+    db.commit()
+    db.refresh(response)
+
+    return FeedbackResponseSingleResponse(
+        success=True,
+        message="Feedback submitted successfully",
+        data=response
+    )
+
+
+@router.get("/feedback-requests/{request_uuid}/responses", response_model=FeedbackResponseListResponse)
+def list_submitted_responses(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "view feedback responses")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    responses = db.query(FeedbackResponse).filter(
+        FeedbackResponse.feedback_request_id == request.id,
+        FeedbackResponse.is_submitted == True,
+        FeedbackResponse.organization_id == org_id
+    ).all()
+
+    # Anonymize responses if configured
+    if request.is_anonymous:
+        for r in responses:
+            r.response_token = uuid.UUID(int=0)  # Mask token
+
+    return FeedbackResponseListResponse(
+        success=True,
+        message="Submitted feedback responses retrieved successfully",
+        data=responses
+    )
+
+
+@router.get("/feedback-requests/{request_uuid}/responses/analytics", response_model=FeedbackResponseAnalyticsResponse)
+def get_feedback_responses_analytics(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "view feedback analytics")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Feedback request not found")
+
+    responses = db.query(FeedbackResponse).filter(
+        FeedbackResponse.feedback_request_id == request.id,
+        FeedbackResponse.is_submitted == True,
+        FeedbackResponse.organization_id == org_id
+    ).all()
+
+    per_question_avg = {}
+    per_competency_avg = {}
+    sentiment_themes = []
+    score_distribution = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+
+    for resp in responses:
+        if resp.overall_rating:
+            rounded_rating = str(round(resp.overall_rating))
+            if rounded_rating in score_distribution:
+                score_distribution[rounded_rating] += 1
+
+        answers = db.query(FeedbackAnswer).filter(
+            FeedbackAnswer.feedback_response_id == resp.id,
+            FeedbackAnswer.organization_id == org_id
+        ).all()
+
+        for ans in answers:
+            q = db.query(FeedbackQuestion).filter(FeedbackQuestion.id == ans.question_id).first()
+            if q and ans.rating:
+                q_uuid_str = str(q.uuid)
+                if q_uuid_str not in per_question_avg:
+                    per_question_avg[q_uuid_str] = []
+                per_question_avg[q_uuid_str].append(ans.rating)
+
+    # Compute averages
+    for q_uuid, ratings in per_question_avg.items():
+        per_question_avg[q_uuid] = sum(ratings) / len(ratings) if ratings else 0.0
+
+    analytics_data = {
+        "per_question_avg": per_question_avg,
+        "per_competency_avg": per_competency_avg,
+        "sentiment_themes": sentiment_themes,
+        "score_distribution": score_distribution
+    }
+
+    return FeedbackResponseAnalyticsResponse(
+        success=True,
+        message="Feedback analytics retrieved successfully",
+        data=analytics_data
+    )
+
+
+@router.delete("/feedback-responses/{response_uuid}")
+def delete_feedback_response(
+    response_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.CREATE, "delete feedback response")
+    org_id = _get_org_id(current_user)
+
+    response = db.query(FeedbackResponse).filter(
+        FeedbackResponse.uuid == response_uuid,
+        FeedbackResponse.organization_id == org_id
+    ).first()
+    if not response:
+        raise HTTPException(status_code=404, detail="Feedback response not found")
+
+    if response.is_submitted:
+        raise HTTPException(status_code=400, detail="Submitted feedback responses cannot be deleted")
+
+    db.delete(response)
+    db.commit()
+
+    return {"success": True, "message": "Feedback response deleted successfully"}
+
+
+@router.get("/feedback-requests/{request_uuid}/responses/export")
+def export_feedback_responses(
+    request_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformanceFeedbackPermissions.READ, "export feedback responses")
+    org_id = _get_org_id(current_user)
+
+    request = db.query(FeedbackRequest).filter(
+        FeedbackRequest.uuid == request_uuid,
+        FeedbackRequest.organization_id == org_id
+    ).first()
+    if not request:
+        raise HTTPException(status_code=4

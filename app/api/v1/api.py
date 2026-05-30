@@ -65,6 +65,9 @@ api_router.include_router(timesheet_policies.router, prefix="/timesheet-policies
 from app.api.v1.endpoints import payroll_reports
 api_router.include_router(payroll_reports.router, prefix="/payroll/reports", tags=["payroll-reports"])
 
+from app.api.v1.endpoints import performance_goal_frameworks
+from app.api.v1.endpoints import performance_appraisal_cycles
+from app.api.v1.endpoints import performance_appraisals
 # ── Payroll Module (auto-generated 2026-05-12) ──────────
 from app.api.v1.endpoints import (
     payroll_salary_components, payroll_salary_templates, payroll_employee_salaries,
@@ -74,6 +77,9 @@ from app.api.v1.endpoints import (
     payroll_statutory_forms, payroll_bulk_operations
 )
 
+api_router.include_router(performance_goal_frameworks.router, prefix="/performance/goals", tags=["performance"])
+api_router.include_router(performance_appraisal_cycles.router, prefix="/performance/cycles", tags=["performance"])
+api_router.include_router(performance_appraisals.router, prefix="/performance/appraisals", tags=["performance"])
 api_router.include_router(payroll_salary_components.router, prefix="/payroll/salary-components", tags=["payroll"])
 api_router.include_router(payroll_salary_templates.router, prefix="/payroll/salary-templates", tags=["payroll"])
 api_router.include_router(payroll_employee_salaries.router, prefix="/payroll/employee-salaries", tags=["payroll"])

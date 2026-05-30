@@ -189,6 +189,38 @@ def create_salary(
 
     return {"success": True, "message": "Salary structure assigned to employee successfully", "data": new_salary}
 
+@router.get("/employees/{employee_uuid}/history", response_model=EmployeeSalaryListResponse)
+def get_salary_history(
+    employee_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "105", "read")
+    org_id = _get_org_id(current_user)
+
+    emp = db.query(Employee).filter(
+        Employee.uuid == employee_uuid,
+        Employee.organization_id == org_id
+    ).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    records = db.query(EmployeeSalary).options(
+        joinedload(EmployeeSalary.employee),
+        joinedload(EmployeeSalary.salary_template)
+    ).filter(
+        EmployeeSalary.employee_id == emp.id,
+        EmployeeSalary.organization_id == org_id
+    ).order_by(EmployeeSalary.effective_from.desc()).all()
+
+    total = len(records)
+    return EmployeeSalaryListResponse(
+        success=True,
+        message="Salary history retrieved successfully",
+        data=records,
+        pagination={"total_records": total, "current_page": 1, "total_pages": 1, "page_size": total}
+    )
+
 @router.get("/{salary_uuid}", response_model=EmployeeSalaryResponse)
 def get_salary_detail(
     salary_uuid: uuid.UUID,

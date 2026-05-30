@@ -39,6 +39,10 @@ class PayrollPeriodSchema(PayrollPeriodBase):
     uuid: UUID4
     status: PayrollStatus
     is_locked: bool
+    is_on_hold: bool
+    hold_reason: Optional[str] = None
+    reversal_reason: Optional[str] = None
+    previous_status: Optional[str] = None
     total_employees: int
     total_gross_amount: Decimal
     total_deductions: Decimal

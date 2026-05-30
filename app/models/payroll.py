@@ -389,6 +389,8 @@ class PayrollPeriod(Base):
     # Hold
     is_on_hold = Column(Boolean, default=False)
     hold_reason = Column(Text, nullable=True)
+    previous_status = Column(String(50), nullable=True)  # Status before hold, for resume
+    reversal_reason = Column(Text, nullable=True)
     
     # Lock
     is_locked = Column(Boolean, default=False, index=True)

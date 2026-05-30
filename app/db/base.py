@@ -42,3 +42,14 @@ from app.models.payroll import (
     PayrollJournalEntry, PayrollJournalEntryLine, StatutoryForm,
     PayrollAuditLog
 ) # noqa
+from app.models.performance import (
+    GoalFramework, OrganizationGoal, DepartmentGoal, EmployeeGoal, GoalProgress, GoalAlignment,
+    AppraisalCycle, RatingScale, AppraisalTemplate, AppraisalSection, AppraisalQuestion,
+    AppraisalRecord, SelfAppraisal, ManagerAppraisal, AppraisalAnswer, AppraisalCalibration,
+    CalibrationParticipant, BellCurveDistribution, FeedbackQuestion, FeedbackRequest, FeedbackProvider,
+    FeedbackResponse, CompetencyFramework, CompetencyMapping, EmployeeCompetency, SkillsGapAnalysis,
+    ContinuousFeedback, OneOnOneMeeting, OneOnOneAgendaItem, PerformanceNote, PIIPlan, PIIObjective,
+    PIIProgressLog, TalentReview, TalentReviewParticipant, SuccessionPlan, SuccessionCandidate,
+    PerformanceMetrics, NotificationTemplate, PerformanceNotification, CompensationIntegration
+) # noqa
+

@@ -12,6 +12,7 @@ from app.schemas.payroll_arrears_one_time import (
     ArrearCreate, ArrearResponse, ArrearListResponse,
     OneTimePaymentCreate, OneTimePaymentResponse, OneTimePaymentListResponse,
 )
+from app.core.permissions import PayrollArrearPermissions
 
 router = APIRouter()
 
@@ -48,7 +49,7 @@ def get_arrears(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
 ):
-    _require_permission(db, current_user, "101", "list arrears")
+    _require_permission(db, current_user, PayrollArrearPermissions.READ, "list arrears")
     query = (
         db.query(Arrear)
         .options(joinedload(Arrear.employee))
@@ -98,7 +99,7 @@ def create_arrear(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
 ):
-    _require_permission(db, current_user, "102", "create arrears")
+    _require_permission(db, current_user, PayrollArrearPermissions.CREATE, "create arrears")
     org_id = _get_org_id(current_user)
     emp = _get_employee_by_uuid(db, item_in.employee_uuid, org_id)
 
@@ -121,7 +122,7 @@ def get_arrear(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
 ):
-    _require_permission(db, current_user, "101", "view arrears")
+    _require_permission(db, current_user, PayrollArrearPermissions.READ, "view arrears")
     item = (
         db.query(Arrear)
         .options(joinedload(Arrear.employee))
@@ -138,7 +139,7 @@ def approve_arrear(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
 ):
-    _require_permission(db, current_user, "103", "approve arrears")
+    _require_permission(db, current_user, PayrollArrearPermissions.APPROVE, "approve arrears")
     item = (
         db.query(Arrear)
         .options(joinedload(Arrear.employee))
@@ -167,7 +168,7 @@ def get_otps(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
 ):
-    _require_permission(db, current_user, "101", "list payments")
+    _require_permission(db, current_user, PayrollArrearPermissions.READ, "list payments")
     query = (
         db.query(OneTimePayment)
         .options(joinedload(OneTimePayment.employee))
@@ -205,7 +206,7 @@ def create_otp(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
 ):
-    _require_permission(db, current_user, "102", "create payments")
+    _require_permission(db, current_user, PayrollArrearPermissions.CREATE, "create payments")
     org_id = _get_org_id(current_user)
     emp = _get_employee_by_uuid(db, item_in.employee_uuid, org_id)
 
@@ -228,7 +229,7 @@ def get_otp(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
 ):
-    _require_permission(db, current_user, "101", "get payment details")
+    _require_permission(db, current_user, PayrollArrearPermissions.READ, "get payment details")
     item = (
         db.query(OneTimePayment)
         .options(joinedload(OneTimePayment.employee))
@@ -246,7 +247,7 @@ def approve_otp(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
 ):
-    _require_permission(db, current_user, "103", "approve payments")
+    _require_permission(db, current_user, PayrollArrearPermissions.APPROVE, "approve payments")
     item = (
         db.query(OneTimePayment)
         .options(joinedload(OneTimePayment.employee))

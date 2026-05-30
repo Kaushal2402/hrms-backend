@@ -252,8 +252,10 @@ def submit_for_approval(
     period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
     if not period: raise HTTPException(404, "Period not found")
     
-    if period.status != PayrollStatus.PROCESSED:
-        raise HTTPException(400, f"Cannot submit for approval from status: {period.status}")
+    # Allow submission from Draft, In Progress, or Processed states
+    allowed_statuses = [PayrollStatus.DRAFT, PayrollStatus.IN_PROGRESS, PayrollStatus.PROCESSED]
+    if period.status not in allowed_statuses:
+        raise HTTPException(400, f"Cannot submit for approval from status: {period.status.value}. Allowed: draft, in_progress, processed")
     
     before_state = PayrollAuditService.get_model_dict(period)
     period.status = PayrollStatus.PENDING_APPROVAL
@@ -326,8 +328,8 @@ def publish_payroll(
     period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
     if not period: raise HTTPException(404, "Period not found")
     
-    if period.status != PayrollStatus.APPROVED:
-        raise HTTPException(400, f"Only approved periods can be published. Current status: {period.status}")
+    if period.status != PayrollStatus.PROCESSED:
+        raise HTTPException(400, f"Only processed periods can be published. Current status: {period.status.value}")
     
     before_state = PayrollAuditService.get_model_dict(period)
     period.status = PayrollStatus.PUBLISHED
@@ -339,9 +341,9 @@ def publish_payroll(
         Payslip.payroll_period_id == period.id,
         Payslip.organization_id == org_id
     ).update({
-        Payslip.is_published: True,
-        Payslip.published_at: func.now(),
-        Payslip.status: PayslipStatus.PUBLISHED
+        "is_published": True,
+        "published_at": func.now(),
+        "status": PayslipStatus.PUBLISHED
     }, synchronize_session=False)
     
     db.commit()
@@ -440,7 +442,12 @@ def hold_period(
     period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
     if not period: raise HTTPException(404, "Period not found")
     
+    if period.status in [PayrollStatus.PUBLISHED, PayrollStatus.PAID, PayrollStatus.REVERSED, PayrollStatus.ON_HOLD]:
+        raise HTTPException(400, f"Cannot hold a period with status: {period.status.value}")
+    
     before_state = PayrollAuditService.get_model_dict(period)
+    # Save current status so resume can restore it
+    period.previous_status = period.status.value
     period.status = PayrollStatus.ON_HOLD
     period.is_on_hold = True
     period.hold_reason = data.reason or data.comments
@@ -457,9 +464,52 @@ def hold_period(
         before_state=before_state,
         after_state=PayrollAuditService.get_model_dict(period),
         risk_level="high",
-        change_summary=f"Put payroll period {period.period_name} on hold"
+        change_summary=f"Put payroll period {period.period_name} on hold. Reason: {period.hold_reason}"
     )
     return {"success": True, "message": "Payroll period put on hold", "data": PayrollPeriodSchema.model_validate(period)}
+
+@router.post("/{period_uuid}/resume", response_model=PayrollPeriodResponse)
+def resume_period(
+    period_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PayrollPeriodPermissions.PROCESS, "resume period")
+    org_id = _get_org_id(current_user)
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == period_uuid, PayrollPeriod.organization_id == org_id).first()
+    if not period: raise HTTPException(404, "Period not found")
+    
+    if period.status != PayrollStatus.ON_HOLD:
+        raise HTTPException(400, "Period is not on hold")
+    
+    # Restore previous status, default to draft if unknown
+    restore_status_value = period.previous_status or PayrollStatus.DRAFT.value
+    try:
+        restore_status = PayrollStatus(restore_status_value)
+    except ValueError:
+        restore_status = PayrollStatus.DRAFT
+    
+    before_state = PayrollAuditService.get_model_dict(period)
+    period.status = restore_status
+    period.is_on_hold = False
+    period.hold_reason = None
+    period.previous_status = None
+    
+    db.commit()
+    db.refresh(period)
+
+    PayrollAuditService.log(
+        db=db,
+        current_user=current_user,
+        action_type="period_resumed",
+        entity_type="payroll_period",
+        entity_id=period.id,
+        before_state=before_state,
+        after_state=PayrollAuditService.get_model_dict(period),
+        risk_level="medium",
+        change_summary=f"Resumed payroll period {period.period_name} from hold, restored to {restore_status.value}"
+    )
+    return {"success": True, "message": f"Payroll period resumed (status restored to {restore_status.value})", "data": PayrollPeriodSchema.model_validate(period)}
 
 @router.post("/{period_uuid}/reverse", response_model=PayrollPeriodResponse)
 def reverse_period(
@@ -484,7 +534,8 @@ def reverse_period(
         Payslip.payroll_period_id == period.id,
         Payslip.organization_id == org_id
     ).update({
-        Payslip.status: PayslipStatus.REVERSED
+        "is_published": False,
+        "status": PayslipStatus.GENERATED
     }, synchronize_session=False)
     
     db.commit()

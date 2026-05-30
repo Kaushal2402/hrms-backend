@@ -22,7 +22,7 @@ class PayrollLoanPermissions:
     READ = "116"
     CREATE = "117"
     APPROVE = "118"
-    UPDATE = "119"
+    UPDATE = "117"
 
 def _get_org_id(current_user: Union[Organization, Employee]) -> int:
     return current_user.id if isinstance(current_user, Organization) else current_user.organization_id

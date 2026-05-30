@@ -1,0 +1,101 @@
+{
+  "verdict": "FAIL",
+  "overall_score": 5.0,
+  "scores": {
+    "pattern_consistency": 8,
+    "multi_tenancy": 0,
+    "uuid_path_params": 9,
+    "pagination_correct": 7,
+    "schema_config": 10,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 4,
+    "rbac_enforced": 0,
+    "business_rules": 7,
+    "error_handling": 5,
+    "completeness": 5,
+    "advanced_listing": 5
+  },
+  "issues": [
+    {
+      "severity": "CRITICAL",
+      "file": "performance_appraisals.py",
+      "line_hint": "all query filters",
+      "issue": "Missing organization_id filter \u2014 data from ALL orgs would be exposed",
+      "fix": "Add .filter(XxxModel.organization_id == current_org.id) to every db.query()"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_appraisals.py",
+      "line_hint": "all endpoints",
+      "issue": "No RBAC permission checks found",
+      "fix": "Add _require_permission(db, current_user, PERMISSION_CODE, 'action') at start of each function"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_appraisals.py",
+      "line_hint": "Create schemas",
+      "issue": "Agent's self-notes claim no UUIDs in Create schemas, but the schema definitions provided are clean. However, the implementation file is completely empty.",
+      "fix": "Implement the API endpoints in performance_appraisals.py"
+    },
+    {
+      "severity": "MINOR",
+      "file": "performance_appraisals.py",
+      "line_hint": "List endpoints",
+      "issue": "Missing advanced filtering/sorting parameters in schema definitions for list endpoints",
+      "fix": "Add query parameters for filtering (e.g., status, cycle_uuid) and sorting to the list request models"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_appraisals_schema.py",
+      "line_hint": "class AppraisalRecordCreate",
+      "issue": "Create schema 'AppraisalRecordCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from AppraisalRecordCreate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_appraisals_schema.py",
+      "line_hint": "class SelfAppraisalCreate",
+      "issue": "Create schema 'SelfAppraisalCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from SelfAppraisalCreate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_appraisals_schema.py",
+      "line_hint": "class ManagerAppraisalCreate",
+      "issue": "Create schema 'ManagerAppraisalCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from ManagerAppraisalCreate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_appraisals_schema.py",
+      "line_hint": "class AppraisalAnswerCreate",
+      "issue": "Create schema 'AppraisalAnswerCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from AppraisalAnswerCreate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_appraisals_schema.py",
+      "line_hint": "class AppraisalCalibrationCreate",
+      "issue": "Create schema 'AppraisalCalibrationCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from AppraisalCalibrationCreate"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_appraisals_schema.py",
+      "line_hint": "class CalibrationParticipantCreate",
+      "issue": "Create schema 'CalibrationParticipantCreate' contains 'uuid:' which should not be in input schemas",
+      "fix": "Remove 'uuid:' field from CalibrationParticipantCreate"
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Always implement the actual endpoint logic in the provided file; an empty file is a failure of completeness.",
+    "Multi-tenancy is non-negotiable in HRM systems; always include organization_id in your base query logic.",
+    "RBAC is a standard requirement; ensure every endpoint has a dependency or decorator for permission verification."
+  ],
+  "passed_checks": [
+    "schema_config",
+    "no_enum_redeclaration",
+    "uuid_path_params",
+    "pattern_consistency"
+  ]
+}

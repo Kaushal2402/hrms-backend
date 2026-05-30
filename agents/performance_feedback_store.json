@@ -1,0 +1,513 @@
+{
+  "common_mistakes": [
+    {
+      "pattern": "Update schema 'CalibrationUpdate' has non-Optional fields: ['calibrated_score', ",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'PromotionRecommendationUpdate' has non-Optional fields: ['promoti",
+      "count": 2,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'BellCurveTargetUpdate' has non-Optional fields: ['distribution']",
+      "count": 7,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Potential data leakage: The endpoint does not verify if the current_user has per",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing organization_id filter in the query for publish_record, creating a poten",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The update_self_appraisal endpoint lacks an explicit RBAC check for the 'update'",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing from_attributes = True in several schemas (e.g., SelfAppraisalUpdate, Ma",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "List endpoint lacks advanced filtering (e.g., by employee_id, cycle_id) and sort",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Incomplete implementation of the module requirements (missing bulk answer creati",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Bulk creation lacks transactional integrity check and potential for partial fail",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing advanced listing features (sorting, search, date range filtering).",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Incomplete implementation of the requested module scope.",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing organization_id filter \u2014 data from ALL orgs would be exposed",
+      "count": 13,
+      "modules": [
+        "appraisals",
+        "feedback_360"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "No RBAC permission checks found",
+      "count": 13,
+      "modules": [
+        "appraisals",
+        "feedback_360"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Module code is entirely missing from the provided input.",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Create schema 'AppraisalRecordCreate' contains 'uuid:' which should not be in in",
+      "count": 6,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Create schema 'SelfAppraisalCreate' contains 'uuid:' which should not be in inpu",
+      "count": 6,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Create schema 'ManagerAppraisalCreate' contains 'uuid:' which should not be in i",
+      "count": 6,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Create schema 'AppraisalAnswerCreate' contains 'uuid:' which should not be in in",
+      "count": 6,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Update schema 'AppraisalAnswerForSelfUpdate' has non-Optional fields: ['question",
+      "count": 2,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'AppraisalAnswerForManagerUpdate' has non-Optional fields: ['quest",
+      "count": 2,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Create schema 'AppraisalCalibrationCreate' contains 'uuid:' which should not be ",
+      "count": 6,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Create schema 'CalibrationParticipantCreate' contains 'uuid:' which should not b",
+      "count": 4,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "No code provided for review",
+      "count": 3,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The endpoint file is completely empty/missing implementation",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Update schemas contain non-optional fields (question_uuid)",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Schema definition is truncated/incomplete at the end of the file",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Update schema 'CalibrationParticipantsUpdate' has non-Optional fields: ['partici",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "The provided code is incomplete; the endpoint file is empty and the schema file ",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Several Create schemas (e.g., AppraisalRecordCreate) include fields that should ",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Syntax error: 'D' is not defined at the end of the file",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Endpoint file is completely empty",
+      "count": 3,
+      "modules": [
+        "appraisals",
+        "feedback_360"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Create schemas contain 'uuid' fields which should not be in input schemas",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Schema definition is truncated/incomplete",
+      "count": 2,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Missing advanced filtering and sorting capabilities.",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Incomplete implementation: Only a subset of the defined schemas are utilized in ",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Hardcoded default value for created_by (0) when user is an Organization.",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Missing multi-tenancy enforcement on sub-resource lookups (SelfAppraisal/Manager",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Missing RBAC checks on update endpoints",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "List endpoint lacks advanced filtering (e.g., date ranges, search by employee na",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Incomplete implementation of the 17 required endpoints",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The bulk_publish endpoint uses 'data: Any' instead of the defined 'BulkPublishRe",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "The list endpoint lacks sorting capabilities (e.g., order_by) and advanced filte",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Several endpoints defined in the schema (AppraisalAnswerCreate, CalibrationParti",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Pagination calculation logic is slightly brittle.",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Missing multi-tenancy enforcement on sub-resource endpoints.",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Inconsistent RBAC enforcement. Only bulk-publish has a permission check.",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Advanced listing is incomplete; missing search functionality and filtering by mu",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Potential for 500 error if record is not found.",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Agent's self-notes claim no UUIDs in Create schemas, but the schema definitions ",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Missing advanced filtering/sorting parameters in schema definitions for list end",
+      "count": 1,
+      "modules": [
+        "appraisals"
+      ],
+      "severity": "MINOR"
+    },
+    {
+      "pattern": "Create schema 'FeedbackQuestionCreate' contains 'uuid:' which should not be in i",
+      "count": 1,
+      "modules": [
+        "feedback_360"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "Create schema 'FeedbackRequestCreate' contains 'uuid:' which should not be in in",
+      "count": 1,
+      "modules": [
+        "feedback_360"
+      ],
+      "severity": "MAJOR"
+    },
+    {
+      "pattern": "The endpoint file is completely empty.",
+      "count": 1,
+      "modules": [
+        "feedback_360"
+      ],
+      "severity": "CRITICAL"
+    },
+    {
+      "pattern": "Bulk import fields use comma-separated strings instead of List types",
+      "count": 1,
+      "modules": [
+        "feedback_360"
+      ],
+      "severity": "MINOR"
+    }
+  ],
+  "improvement_hints": [
+    "Always apply multi-tenancy filters to every database query, including PATCH/PUT operations, not just GET requests.",
+    "Ensure that 'Update' schemas strictly follow the pattern of all fields being Optional to allow partial updates via PATCH.",
+    "Implement ownership validation logic in addition to RBAC to ensure users can only modify their own records or records within their scope.",
+    "Always implement the full scope of endpoints requested, even if it requires modularizing the router into multiple files.",
+    "Ensure all Pydantic models intended for ORM mapping include the Config class with from_attributes=True.",
+    "For list endpoints, always include basic filtering (e.g., by foreign keys) and sorting to meet production standards.",
+    "Always implement the full scope of requested endpoints; partial implementation is a failure in a production context.",
+    "Ensure all Update schemas strictly follow the 'all fields optional' pattern to prevent validation errors during partial updates.",
+    "Implement sorting and search parameters in list endpoints as standard practice for production HRM systems.",
+    "Ensure that the code block content is actually provided in the prompt before requesting a review.",
+    "Always verify that multi-tenancy and RBAC are implemented as the first step in any HRM system module.",
+    "Always implement multi-tenancy at the database query level using organization_id.",
+    "Ensure Create schemas strictly exclude auto-generated fields like UUIDs and timestamps.",
+    "Ensure Update schemas have all fields marked as Optional to allow partial updates.",
+    "Always include RBAC decorators or dependency checks for every endpoint in an HRM system.",
+    "Always ensure the code block is populated before submitting for review.",
+    "Adhere to the multi-tenancy requirement by default in all database queries.",
+    "Ensure all endpoints are protected by the project's standard RBAC dependency.",
+    "Always implement the API endpoints file when providing a module review; schemas alone are insufficient for a functional HRM system.",
+    "Ensure all Update schemas strictly follow the 'all fields optional' rule to prevent partial update failures.",
+    "Multi-tenancy is a non-negotiable requirement in HRM systems; always include organization_id filtering in your initial code generation.",
+    "Always verify that the code block is not truncated before submitting.",
+    "Future generations should always ensure the provided code blocks are populated before submitting for review.",
+    "Common pattern the agent missed: Multi-tenancy and RBAC are non-negotiable requirements for this HRM system.",
+    "Always verify that the generated code is syntactically complete before outputting.",
+    "Prioritize security (Multi-tenancy and RBAC) as the first step in any HRM module implementation.",
+    "Ensure that Create schemas strictly follow the 'no auto-fields' rule; do not include fields that the database or business logic should handle.",
+    "Future generations should always implement a base dependency for multi-tenancy (e.g., get_current_org) and apply it to all database queries.",
+    "Common pattern the agent missed: Always validate that Create schemas do not include system-generated fields like UUIDs or timestamps.",
+    "Ensure all files are syntactically complete; the provided schema file ends with a syntax error.",
+    "Always ensure the endpoint file is populated with route handlers, not just the schema file.",
+    "Strictly enforce multi-tenancy by including organization_id in every database query.",
+    "Review Create schemas to ensure they only contain fields provided by the client, excluding system-generated fields like UUIDs.",
+    "Implement RBAC middleware or dependency injection for all protected routes.",
+    "Ensure that all schemas defined in the schema file are actually wired into the router endpoints.",
+    "Implement dynamic sorting (e.g., using a list of allowed sort fields) to improve the utility of list endpoints.",
+    "Always verify that update schemas strictly follow the 'all fields optional' pattern to prevent validation errors during partial updates.",
+    "Always verify that every database query involving a sub-resource (like SelfAppraisal) includes a join or filter against the parent's organization_id.",
+    "Ensure that all update endpoints have explicit permission checks, even if the GET endpoints do.",
+    "For list endpoints, go beyond basic filtering to include sorting and range-based queries to meet 'advanced_listing' requirements.",
+    "Always ensure that the request body type hints in the router match the Pydantic schemas defined in the schema module.",
+    "When implementing list endpoints, include sorting parameters by default as it is a standard requirement for production HRM systems.",
+    "Ensure all schemas defined in the schema file are actually utilized in the router; unused schemas indicate incomplete implementation.",
+    "Always verify that sub-resources (like answers or appraisals) are scoped to the organization_id of the parent record.",
+    "Do not assume that because a record is found by UUID, it belongs to the current user's organization; always include the organization_id in the filter.",
+    "Ensure all endpoints follow the same RBAC pattern as the bulk-publish endpoint.",
+    "Common pattern the agent missed: Multi-tenancy and RBAC are mandatory requirements for this HRM system.",
+    "Always verify that the generated code is not truncated before submitting.",
+    "Multi-tenancy is a non-negotiable requirement in HRM systems; always include organization_id filtering in the initial draft.",
+    "Ensure that all requested endpoints are actually implemented in the endpoint file, not just the schemas.",
+    "Always implement the actual endpoint logic in the provided file; an empty file is a failure of completeness.",
+    "Multi-tenancy is non-negotiable in HRM systems; always include organization_id in your base query logic.",
+    "RBAC is a standard requirement; ensure every endpoint has a dependency or decorator for permission verification.",
+    "Always implement the endpoint logic alongside the schemas; providing only schemas is insufficient for a functional module.",
+    "Ensure multi-tenancy is baked into the base query logic for every database interaction.",
+    "Strictly validate that 'Create' schemas do not include system-generated fields like UUIDs or timestamps.",
+    "Future generations should always implement the actual API route handlers, not just the schemas.",
+    "Common pattern the agent missed: Multi-tenancy and RBAC are non-negotiable requirements for production HRM systems and must be baked into the base query logic.",
+    "Ensure that bulk import schemas handle data transformation (e.g., string to list) via Pydantic validators rather than relying on raw string inputs."
+  ],
+  "module_scores": {
+    "appraisals": 5.0,
+    "feedback_360": 4.5
+  },
+  "total_cycles_used": 20
+}

@@ -1,0 +1,537 @@
+<<<SCHEMAS_RAW>>>
+<<<SCHEMA_FILE>>>
+from typing import List, Optional, Any, Dict
+from datetime import datetime, date
+from decimal import Decimal
+from pydantic import BaseModel, UUID4, field_validator, model_validator
+
+from app.schemas.department import PaginatedResponse
+from app.models.performance import (
+    GoalFrameworkType, GoalStatus, GoalType, GoalMeasurementType,
+    CycleFrequency, CycleStatus, AppraisalStatus, QuestionType,
+    FeedbackRequestStatus, FeedbackProviderType, PIPStatus,
+    TalentCategory, NineBoxPosition, NotificationType
+)
+
+# ============================================================
+# NESTED / ENRICHED SCHEMAS FOR RELATIONSHIPS
+# ============================================================
+
+class EmployeeNestedSchema(BaseModel):
+    uuid: UUID4
+    first_name: str
+    last_name: str
+    email: str
+    employee_id: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalCycleNestedSchema(BaseModel):
+    uuid: UUID4
+    name: str
+    status: CycleStatus
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalTemplateNestedSchema(BaseModel):
+    uuid: UUID4
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class RatingScaleNestedSchema(BaseModel):
+    uuid: UUID4
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+# APPRAISAL RECORD SCHEMAS
+# ============================================================
+
+class AppraisalRecordBase(BaseModel):
+    notes: Optional[str] = None
+    is_active: bool = True
+
+
+class AppraisalRecordCreate(AppraisalRecordBase):
+    appraisal_cycle_uuid: UUID4
+    employee_uuid: UUID4
+    manager_uuid: Optional[UUID4] = None
+    template_uuid: UUID4
+    rating_scale_uuid: UUID4
+
+
+class AppraisalRecordUpdate(BaseModel):
+    manager_uuid: Optional[UUID4] = None
+    status: Optional[AppraisalStatus] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class AppraisalRecordSchema(AppraisalRecordBase):
+    uuid: UUID4
+    status: AppraisalStatus
+    self_goal_score: Optional[Decimal] = None
+    self_competency_score: Optional[Decimal] = None
+    self_overall_score: Optional[Decimal] = None
+    self_rating_label: Optional[str] = None
+    manager_goal_score: Optional[Decimal] = None
+    manager_competency_score: Optional[Decimal] = None
+    manager_overall_score: Optional[Decimal] = None
+    manager_rating_label: Optional[str] = None
+    final_score: Optional[Decimal] = None
+    final_rating_label: Optional[str] = None
+    calibrated_score: Optional[Decimal] = None
+    calibration_notes: Optional[str] = None
+    self_appraisal_submitted_at: Optional[datetime] = None
+    manager_review_submitted_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    acknowledged_by_employee: bool
+    employee_acknowledged_at: Optional[datetime] = None
+    employee_disagreement_reason: Optional[str] = None
+    has_360_feedback: bool
+    feedback_360_score: Optional[Decimal] = None
+    compensation_action_triggered: bool
+    promotion_recommended: bool
+    promotion_recommended_to_grade: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    # Enriched fields
+    employee: Optional[EmployeeNestedSchema] = None
+    manager: Optional[EmployeeNestedSchema] = None
+    appraisal_cycle: Optional[AppraisalCycleNestedSchema] = None
+    template: Optional[AppraisalTemplateNestedSchema] = None
+    rating_scale: Optional[RatingScaleNestedSchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalRecordResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[AppraisalRecordSchema] = None
+
+
+class AppraisalRecordListResponse(PaginatedResponse[List[AppraisalRecordSchema]]):
+    pass
+
+
+# ============================================================
+# SELF-APPRAISAL SCHEMAS
+# ============================================================
+
+class SelfAppraisalBase(BaseModel):
+    achievements_summary: Optional[str] = None
+    challenges_faced: Optional[str] = None
+    learning_development: Optional[str] = None
+    career_aspirations: Optional[str] = None
+    support_needed: Optional[str] = None
+
+
+class SelfAppraisalCreate(SelfAppraisalBase):
+    appraisal_record_uuid: UUID4
+
+
+class SelfAppraisalUpdate(BaseModel):
+    achievements_summary: Optional[str] = None
+    challenges_faced: Optional[str] = None
+    learning_development: Optional[str] = None
+    career_aspirations: Optional[str] = None
+    support_needed: Optional[str] = None
+
+
+class SelfAppraisalSchema(SelfAppraisalBase):
+    uuid: UUID4
+    is_submitted: bool
+    submitted_at: Optional[datetime] = None
+    last_saved_at: Optional[datetime] = None
+    draft_version: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SelfAppraisalResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[SelfAppraisalSchema] = None
+
+
+# ============================================================
+# MANAGER APPRAISAL SCHEMAS
+# ============================================================
+
+class ManagerAppraisalBase(BaseModel):
+    performance_summary: Optional[str] = None
+    strengths: Optional[str] = None
+    areas_for_improvement: Optional[str] = None
+    development_plan: Optional[str] = None
+    promotion_recommendation: Optional[str] = None
+    override_reason: Optional[str] = None
+
+
+class ManagerAppraisalCreate(ManagerAppraisalBase):
+    appraisal_record_uuid: UUID4
+
+
+class ManagerAppraisalUpdate(BaseModel):
+    performance_summary: Optional[str] = None
+    strengths: Optional[str] = None
+    areas_for_improvement: Optional[str] = None
+    development_plan: Optional[str] = None
+    promotion_recommendation: Optional[str] = None
+    override_reason: Optional[str] = None
+
+
+class ManagerAppraisalSchema(ManagerAppraisalBase):
+    uuid: UUID4
+    is_submitted: bool
+    submitted_at: Optional[datetime] = None
+    last_saved_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ManagerAppraisalResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[ManagerAppraisalSchema] = None
+
+
+# ============================================================
+# APPRAISAL ANSWER SCHEMAS
+# ============================================================
+
+class AppraisalAnswerBase(BaseModel):
+    respondent_type: str  # "self" or "manager"
+    rating_value: Optional[Decimal] = None
+    rating_label: Optional[str] = None
+    text_answer: Optional[str] = None
+    selected_choices: Optional[List[str]] = []
+    goal_achievement_percentage: Optional[Decimal] = None
+
+
+class AppraisalAnswerCreate(AppraisalAnswerBase):
+    appraisal_record_uuid: UUID4
+    question_uuid: UUID4
+    goal_uuid: Optional[UUID4] = None
+    competency_uuid: Optional[UUID4] = None
+
+
+class AppraisalAnswerUpdate(BaseModel):
+    rating_value: Optional[Decimal] = None
+    rating_label: Optional[str] = None
+    text_answer: Optional[str] = None
+    selected_choices: Optional[List[str]] = None
+    goal_achievement_percentage: Optional[Decimal] = None
+
+
+class AppraisalAnswerSchema(AppraisalAnswerBase):
+    uuid: UUID4
+    weight_applied: Optional[Decimal] = None
+    weighted_score: Optional[Decimal] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalAnswerResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[AppraisalAnswerSchema] = None
+
+
+# ============================================================
+# APPRAISAL CALIBRATION SCHEMAS
+# ============================================================
+
+class AppraisalCalibrationBase(BaseModel):
+    name: str
+    scheduled_date: Optional[datetime] = None
+    target_distribution: Optional[Dict[str, float]] = None
+    session_notes: Optional[str] = None
+    meeting_minutes: Optional[str] = None
+
+
+class AppraisalCalibrationCreate(AppraisalCalibrationBase):
+    appraisal_cycle_uuid: UUID4
+    department_uuid: Optional[UUID4] = None
+    facilitator_uuid: UUID4
+
+
+class AppraisalCalibrationUpdate(BaseModel):
+    name: Optional[str] = None
+    scheduled_date: Optional[datetime] = None
+    target_distribution: Optional[Dict[str, float]] = None
+    session_notes: Optional[str] = None
+    meeting_minutes: Optional[str] = None
+    facilitator_uuid: Optional[UUID4] = None
+    status: Optional[str] = None
+
+
+class AppraisalCalibrationSchema(AppraisalCalibrationBase):
+    uuid: UUID4
+    conducted_date: Optional[datetime] = None
+    actual_distribution: Optional[Dict[str, float]] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    # Enriched fields
+    facilitator: Optional[EmployeeNestedSchema] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalCalibrationResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[AppraisalCalibrationSchema] = None
+
+
+class AppraisalCalibrationListResponse(PaginatedResponse[List[AppraisalCalibrationSchema]]):
+    pass
+
+
+# ============================================================
+# CALIBRATION PARTICIPANT SCHEMAS
+# ============================================================
+
+class CalibrationParticipantCreate(BaseModel):
+    employee_uuid: UUID4
+    role: str
+
+
+class CalibrationParticipantSchema(BaseModel):
+    uuid: UUID4
+    role: str
+    employee: EmployeeNestedSchema
+
+    class Config:
+        from_attributes = True
+
+
+class CalibrationParticipantListResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[CalibrationParticipantSchema]
+
+
+# ============================================================
+# ACTION REQUEST & RESPONSE SCHEMAS
+# ============================================================
+
+class AcknowledgeRequest(BaseModel):
+    acknowledged: bool
+    employee_disagreement_reason: Optional[str] = None
+
+
+class CalibrateRequest(BaseModel):
+    calibrated_score: Decimal
+    final_rating_label: str
+    calibration_notes: Optional[str] = None
+
+
+class PromotionRecommendationUpdate(BaseModel):
+    promotion_recommended: Optional[bool] = None
+    promotion_recommended_to_grade: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ScoreOverrideRequest(BaseModel):
+    manager_overall_score: Decimal
+    manager_rating_label: str
+    override_reason: str
+
+
+class BulkPublishRequest(BaseModel):
+    appraisal_cycle_uuid: UUID4
+    department_uuids: Optional[List[UUID4]] = None
+    rating_labels: Optional[List[str]] = None
+
+
+class BulkPublishResponse(BaseModel):
+    success: bool
+    message: str
+    published_count: int
+    skipped_count: int
+
+
+class ReopenRequest(BaseModel):
+    reason: str
+
+
+class BulkAnswersRequest(BaseModel):
+    respondent_type: str
+    answers: List[AppraisalAnswerCreate]
+
+
+class BulkAnswersResponse(BaseModel):
+    success: bool
+    message: str
+    saved_count: int
+    validation_errors: Optional[List[str]] = None
+
+
+class ScoreComparisonSection(BaseModel):
+    title: str
+    self_score: Optional[Decimal] = None
+    manager_score: Optional[Decimal] = None
+    delta: Optional[Decimal] = None
+
+
+class ScoreComparisonResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[ScoreComparisonSection]
+
+
+class SelfAppraisalCompletionData(BaseModel):
+    completion_percentage: Decimal
+    answered_count: int
+    total_required: int
+    pending_questions: List[UUID4]
+
+
+class SelfAppraisalCompletionResponse(BaseModel):
+    success: bool
+    message: str
+    data: SelfAppraisalCompletionData
+
+
+# ============================================================
+# BELL CURVE & NORMALIZATION SCHEMAS
+# ============================================================
+
+class BellCurveTargetItem(BaseModel):
+    rating_label: str
+    target_percentage: Decimal
+
+
+class BellCurveTargetUpdate(BaseModel):
+    department_uuid: Optional[UUID4] = None
+    distribution: Optional[List[BellCurveTargetItem]] = None
+
+
+class BellCurveDistributionItem(BaseModel):
+    rating_label: str
+    target_pct: Decimal
+    target_count: int
+    actual_count: int
+    actual_pct: Decimal
+    variance: Decimal
+
+
+class BellCurveDistributionResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[BellCurveDistributionItem]
+
+
+class NormalizationSuggestionItem(BaseModel):
+    employee_uuid: UUID4
+    employee_name: str
+    current_label: str
+    suggested_label: str
+    delta: Decimal
+
+
+class NormalizationSuggestionsResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[NormalizationSuggestionItem]
+<<<END_SCHEMA>>>
+
+<<<AGENT_NOTES>>>
+1. Imported all required performance-related Enums directly from `app.models.performance` to avoid re-declaration.
+2. Created nested schemas (`EmployeeNestedSchema`, `AppraisalCycleNestedSchema`, etc.) to enrich the response objects without exposing raw database IDs.
+3. Ensured all `Create` schemas do not contain `uuid`, `id`, `created_at`, or `updated_at` fields.
+4. Ensured all `Update` schemas have all fields wrapped in `Optional[...]` to allow partial updates.
+5. Fully implemented all requested action schemas (`ScoreOverrideRequest`, `BellCurveTargetUpdate`, `PromotionRecommendationUpdate`, `CalibrationParticipantCreate`, etc.) to prevent truncation or missing schema errors.
+6. Added `class Config: from_attributes = True` to all schema models to support SQLAlchemy ORM conversion.
+<<<END_NOTES>>>
+
+<<<ENDPOINTS_RAW>>>
+):
+            _require_permission(db, current_user, PerformancePermissions.UPDATE, "submit self appraisal")
+            org_id = _get_org_id(current_user)
+
+            record = db.query(AppraisalRecord).filter(
+                AppraisalRecord.uuid == record_uuid,
+                AppraisalRecord.organization_id == org_id
+            ).first()
+            if not record:
+                raise HTTPException(status_code=404, detail="Appraisal record not found")
+
+            if not isinstance(current_user, Organization) and record.employee_id != current_user.id:
+                raise HTTPException(status_code=403, detail="You can only submit your own self appraisal")
+
+            self_app = db.query(SelfAppraisal).filter(
+                SelfAppraisal.appraisal_record_id == record.id
+            ).first()
+
+            if not self_app:
+                raise HTTPException(status_code=404, detail="Self appraisal not found")
+
+            self_app.is_submitted = True
+            self_app.submitted_at = datetime.utcnow()
+
+            record.status = AppraisalStatus.SELF_SUBMITTED
+            record.self_appraisal_submitted_at = datetime.utcnow()
+
+            db.commit()
+            db.refresh(self_app)
+
+            return SelfAppraisalResponse(
+                success=True,
+                message="Self appraisal submitted successfully",
+                data=self_app
+            )
+        ```
+
+    *   `POST /performance/appraisal-records/{record_uuid}/self-appraisal/reopen`
+        ```python
+        @router.post("/appraisal-records/{record_uuid}/self-appraisal/reopen", response_model=SelfAppraisalResponse)
+        def reopen_self_appraisal(
+            record_uuid: uuid.UUID,
+            reopen_in: ReopenRequest,
+            db: Session = Depends(deps.get_db),
+            current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+        ):
+            _require_permission(db, current_user, PerformancePermissions.APPROVE, "reopen self appraisal")
+            org_id = _get_org_id(current_user)
+
+            record = db.query(AppraisalRecord).filter(
+                AppraisalRecord.uuid == record_uuid,
+                AppraisalRecord.organization_id == org_id
+            ).first()
+            if not record:
+                raise HTTPException(status_code=404, detail="Appraisal record not found")
+
+            self_app = db.query(SelfAppraisal).filter(
+                SelfAppraisal.appraisal_record_id == record.id
+            ).first()
+
+            if not self_app:
+                raise HTTPException(status_code=404, detail="Self appraisal not found")
+
+            self_app.is_submitted =

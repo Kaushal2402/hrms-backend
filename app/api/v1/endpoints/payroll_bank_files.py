@@ -178,8 +178,8 @@ def generate_bank_file(
     org_id = _get_org_id(current_user)
     
     period = db.query(PayrollPeriod).filter(PayrollPeriod.uuid == item_in.period_uuid, PayrollPeriod.organization_id == org_id).first()
-    if not period or period.status not in [PayrollStatus.APPROVED, PayrollStatus.PROCESSED]:
-        raise HTTPException(400, "Period must be approved or processed")
+    if not period or period.status not in [PayrollStatus.APPROVED, PayrollStatus.PROCESSED, PayrollStatus.PUBLISHED]:
+        raise HTTPException(400, "Period must be approved, processed or published")
         
     payslips_summary = db.query(
         func.count(Payslip.id),
@@ -329,7 +329,7 @@ def upload_confirmation(
         utr_dict = {item.employee_uuid: item.utr_number for item in data.utr_numbers if item.utr_number}
         
     file.bank_confirmation_received = True
-    file.bank_utr_numbers = utr_dict
+    file.bank_utr_numbers = {str(k): v for k, v in utr_dict.items()}
     file.status = "processed"
     
     if utr_dict:

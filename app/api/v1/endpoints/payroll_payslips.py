@@ -13,7 +13,7 @@ from app.api import deps
 from app.db.session import SessionLocal
 from app.models.organization import Organization
 from app.models.employee import Employee, Department
-from app.models.payroll import Payslip, PayrollStatus, PayrollPeriod
+from app.models.payroll import Payslip, PayrollStatus, PayrollPeriod, PayslipStatus
 from app.schemas.payroll_payslips import (
     PayslipSchema, PayslipListResponse, PayslipResponse, 
     PayslipHoldUpdate, PayslipReverseCreate, BulkEmailRequest
@@ -62,7 +62,10 @@ def get_payslips(
         .join(PayrollPeriod, Payslip.payroll_period_id == PayrollPeriod.id)\
         .filter(Payslip.organization_id == org_id)
     
-    if not isinstance(current_user, Organization):
+    # If the user is an employee, only restrict to their own payslips if they do not have the READ permission.
+    # Note: the _require_permission check above ensures they have READ permission to even list at all,
+    # but let's be safe and check if they have READ permission before showing all.
+    if not isinstance(current_user, Organization) and not deps.has_permission(db, current_user, PayrollPayslipPermissions.READ):
         query = query.filter(Payslip.employee_id == current_user.id)
     
     if period_uuid: 
@@ -199,7 +202,8 @@ def get_payslip_details(payslip_uuid: uuid.UUID, db: Session = Depends(deps.get_
     
     payslip, emp, dept, period = result
     if not isinstance(current_user, Organization) and payslip.employee_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        if not deps.has_permission(db, current_user, PayrollPayslipPermissions.READ):
+            raise HTTPException(status_code=403, detail="Access denied")
 
     p_schema = PayslipSchema.model_validate(payslip)
     p_schema.employee_name = f"{emp.first_name} {emp.last_name}"
@@ -214,13 +218,13 @@ def hold_payslip(payslip_uuid: uuid.UUID, data: PayslipHoldUpdate, db: Session =
     _require_permission(db, current_user, PayrollPayslipPermissions.PUBLISH, "hold payslip")
     item = db.query(Payslip).filter(Payslip.uuid == payslip_uuid, Payslip.organization_id == _get_org_id(current_user)).first()
     if not item: raise HTTPException(404, "Payslip not found")
-    if item.status.value in ["paid", "reversed"]:
-        raise HTTPException(400, f"Cannot hold a {item.status.value} payslip")
+    if item.is_reversed:
+        raise HTTPException(400, "Cannot hold a reversed payslip")
     
     before_state = PayrollAuditService.get_model_dict(item)
     
-    item.status = PayslipStatus.ON_HOLD
-    item.hold_reason = data.reason
+    item.is_on_hold = True
+    item.hold_reason = data.hold_reason
     
     db.commit()
     db.refresh(item)
@@ -245,13 +249,13 @@ def reverse_payslip(payslip_uuid: uuid.UUID, data: PayslipReverseCreate, db: Ses
     _require_permission(db, current_user, PayrollPayslipPermissions.REVERSE, "reverse payslip")
     item = db.query(Payslip).filter(Payslip.uuid == payslip_uuid, Payslip.organization_id == _get_org_id(current_user)).first()
     if not item: raise HTTPException(404, "Payslip not found")
-    if item.status.value == "draft":
-        raise HTTPException(400, "Cannot reverse a draft payslip")
+    if item.is_reversed:
+        raise HTTPException(400, "Payslip is already reversed")
         
     before_state = PayrollAuditService.get_model_dict(item)
     
-    item.status = PayslipStatus.REVERSED
-    item.reversal_reason = data.reason
+    item.is_reversed = True
+    item.reversal_reason = data.reversal_reason
     
     db.commit()
     db.refresh(item)
@@ -386,7 +390,8 @@ def download_payslip(
     payslip, emp, period, org = result
     
     if not isinstance(current_user, Organization) and payslip.employee_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to download this payslip")
+        if not deps.has_permission(db, current_user, PayrollPayslipPermissions.READ):
+            raise HTTPException(status_code=403, detail="Not authorized to download this payslip")
 
     # Real PDF Generation Logic
     # Correct path to root/mock_files/payslips

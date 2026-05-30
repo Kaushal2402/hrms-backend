@@ -1,0 +1,60 @@
+{
+  "verdict": "FAIL",
+  "overall_score": 4.5,
+  "scores": {
+    "pattern_consistency": 9,
+    "multi_tenancy": 0,
+    "uuid_path_params": 10,
+    "pagination_correct": 8,
+    "schema_config": 10,
+    "no_enum_redeclaration": 10,
+    "create_update_schema": 10,
+    "rbac_enforced": 0,
+    "business_rules": 5,
+    "error_handling": 0,
+    "completeness": 0,
+    "advanced_listing": 2
+  },
+  "issues": [
+    {
+      "severity": "CRITICAL",
+      "file": "performance_feedback_360.py",
+      "line_hint": "all query filters",
+      "issue": "Missing organization_id filter \u2014 data from ALL orgs would be exposed",
+      "fix": "Add .filter(XxxModel.organization_id == current_org.id) to every db.query()"
+    },
+    {
+      "severity": "MAJOR",
+      "file": "performance_feedback_360.py",
+      "line_hint": "all endpoints",
+      "issue": "No RBAC permission checks found",
+      "fix": "Add _require_permission(db, current_user, PERMISSION_CODE, 'action') at start of each function"
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "performance_feedback_360.py",
+      "line_hint": "N/A",
+      "issue": "Endpoint file is completely empty",
+      "fix": "Implement the FastAPI route handlers corresponding to the defined schemas."
+    },
+    {
+      "severity": "MINOR",
+      "file": "performance_feedback_360.py",
+      "line_hint": "FeedbackQuestionBulkImportRow",
+      "issue": "Bulk import fields use comma-separated strings instead of List types",
+      "fix": "Use Pydantic validators to parse comma-separated strings into List[str] or change input to accept JSON arrays."
+    }
+  ],
+  "improvement_hints_for_agent": [
+    "Future generations should always implement the actual API route handlers, not just the schemas.",
+    "Common pattern the agent missed: Multi-tenancy and RBAC are non-negotiable requirements for production HRM systems and must be baked into the base query logic.",
+    "Ensure that bulk import schemas handle data transformation (e.g., string to list) via Pydantic validators rather than relying on raw string inputs."
+  ],
+  "passed_checks": [
+    "pattern_consistency",
+    "uuid_path_params",
+    "schema_config",
+    "no_enum_redeclaration",
+    "create_update_schema"
+  ]
+}
