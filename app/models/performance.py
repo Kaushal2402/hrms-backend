@@ -174,7 +174,7 @@ class GoalFramework(Base):
     goal_weight_enabled = Column(Boolean, default=True)
     default_scoring_method = Column(String(50), default="weighted_average")
 
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -214,6 +214,7 @@ class OrganizationGoal(Base):
 
     # Status
     status = Column(Enum(GoalStatus), default=GoalStatus.DRAFT)
+    status_notes = Column(Text, nullable=True)               # Notes recorded on last status change
     weight = Column(Numeric(5, 2), default=100.00)           # Relative importance %
     progress_percentage = Column(Numeric(5, 2), default=0)
 
@@ -224,7 +225,7 @@ class OrganizationGoal(Base):
     tags = Column(JSON, default=list)                        # ["Revenue", "Growth"]
     attachments = Column(JSON, default=list)
 
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

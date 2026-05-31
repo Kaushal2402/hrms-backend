@@ -68,6 +68,8 @@ api_router.include_router(payroll_reports.router, prefix="/payroll/reports", tag
 from app.api.v1.endpoints import performance_goal_frameworks
 from app.api.v1.endpoints import performance_appraisal_cycles
 from app.api.v1.endpoints import performance_appraisals
+from app.api.v1.endpoints import performance_org_goals
+from app.api.v1.endpoints import performance_dept_goals
 # ── Payroll Module (auto-generated 2026-05-12) ──────────
 from app.api.v1.endpoints import (
     payroll_salary_components, payroll_salary_templates, payroll_employee_salaries,
@@ -77,7 +79,10 @@ from app.api.v1.endpoints import (
     payroll_statutory_forms, payroll_bulk_operations
 )
 
+api_router.include_router(performance_goal_frameworks.lookup_router, prefix="/performance/goals/lookup", tags=["performance"])
 api_router.include_router(performance_goal_frameworks.router, prefix="/performance/goals", tags=["performance"])
+api_router.include_router(performance_org_goals.router, prefix="/performance/org-goals", tags=["performance"])
+api_router.include_router(performance_dept_goals.router, prefix="/performance/department-goals", tags=["performance"])
 api_router.include_router(performance_appraisal_cycles.router, prefix="/performance/cycles", tags=["performance"])
 api_router.include_router(performance_appraisals.router, prefix="/performance/appraisals", tags=["performance"])
 api_router.include_router(payroll_salary_components.router, prefix="/payroll/salary-components", tags=["payroll"])

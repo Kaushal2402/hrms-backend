@@ -196,6 +196,10 @@ class Employee(Base):
         return f"{self.first_name} {self.last_name}"
         
     @property
+    def email(self) -> str:
+        return self.work_email
+        
+    @property
     def job_title_name(self) -> Optional[str]:
         return self.job_title.title_name if self.job_title else None
         

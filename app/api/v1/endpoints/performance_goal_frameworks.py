@@ -14,6 +14,7 @@ from app.schemas.performance_goal_frameworks import (
 )
 
 router = APIRouter()
+lookup_router = APIRouter()
 
 class PerformancePermissions:
     READ = "201"
@@ -37,6 +38,8 @@ def get_goal_frameworks(
     framework_type: Optional[str] = None,
     is_active: Optional[bool] = None,
     search: Optional[str] = None,
+    sort_by: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
@@ -50,6 +53,23 @@ def get_goal_frameworks(
         query = query.filter(GoalFramework.is_active == is_active)
     if search:
         query = query.filter(GoalFramework.name.ilike(f"%{search}%"))
+
+    # Sorting
+    if sort_by:
+        if sort_by == "name":
+            sort_attr = GoalFramework.name
+        elif sort_by == "created_at":
+            sort_attr = GoalFramework.created_at
+        else:
+            sort_attr = GoalFramework.created_at
+            
+        if sort_order == "desc":
+            query = query.order_by(sort_attr.desc())
+        else:
+            query = query.order_by(sort_attr.asc())
+    else:
+        # Default sort
+        query = query.order_by(GoalFramework.created_at.desc())
         
     total_records = query.count()
     items = query.offset((page - 1) * limit).limit(limit).all()
@@ -74,7 +94,7 @@ def create_goal_framework(
     if db.query(GoalFramework).filter(GoalFramework.organization_id == org_id, GoalFramework.name == item_in.name).first():
         raise HTTPException(400, "Framework name already exists")
         
-    item = GoalFramework(organization_id=org_id, created_by=current_user.id if not isinstance(current_user, Organization) else 0, **item_in.model_dump())
+    item = GoalFramework(organization_id=org_id, created_by=current_user.id if not isinstance(current_user, Organization) else None, **item_in.model_dump())
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -139,3 +159,52 @@ def delete_goal_framework(
     db.delete(item)
     db.commit()
     return {"success": True, "message": "Goal framework deleted successfully"}
+
+@lookup_router.get("", response_model=GoalFrameworkListResponse)
+def list_goal_frameworks_lookup(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    framework_type: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
+    current_org: Organization = Depends(deps.get_current_org)
+):
+    query = db.query(GoalFramework).filter(GoalFramework.organization_id == current_org.id)
+    
+    if framework_type:
+        query = query.filter(GoalFramework.framework_type == framework_type)
+    if is_active is not None:
+        query = query.filter(GoalFramework.is_active == is_active)
+    if search:
+        query = query.filter(GoalFramework.name.ilike(f"%{search}%"))
+
+    # Sorting
+    if sort_by:
+        if sort_by == "name":
+            sort_attr = GoalFramework.name
+        elif sort_by == "created_at":
+            sort_attr = GoalFramework.created_at
+        else:
+            sort_attr = GoalFramework.created_at
+            
+        if sort_order == "desc":
+            query = query.order_by(sort_attr.desc())
+        else:
+            query = query.order_by(sort_attr.asc())
+    else:
+        # Default sort
+        query = query.order_by(GoalFramework.created_at.desc())
+        
+    total_records = query.count()
+    items = query.offset((page - 1) * limit).limit(limit).all()
+    
+    return GoalFrameworkListResponse(
+        success=True, message="Goal frameworks retrieved successfully",
+        data=items, pagination={'total_records': total_records, 'current_page': page, 
+                                'total_pages': (total_records + limit - 1) // limit if total_records > 0 else 0, 
+                                'page_size': limit}
+    )
