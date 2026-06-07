@@ -116,3 +116,15 @@ class OrgGoalSummaryResponse(BaseModel):
     success: bool
     message: str
     data: OrgGoalSummarySchema
+
+class OrgGoalLookupItem(BaseModel):
+    uuid: UUID4
+    title: str
+
+    class Config:
+        from_attributes = True
+
+class OrgGoalLookupResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[OrgGoalLookupItem]

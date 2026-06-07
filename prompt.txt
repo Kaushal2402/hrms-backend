@@ -26,3 +26,258 @@ permission_code: 12 [Apply on delete location]
 ----------------
 ----------------
 
+@contextScopeItemMention Create the Modal for the Add employee goal. Use the below API
+
+/api/v1/performance/employee-goals/
+
+{
+
+  "title": "Employee Goal",
+
+  "description": "Employee Goal Descriptions",
+
+  "start_date": "2026-06-07", // Ant datepicker
+
+  "end_date": "2026-06-07", // Ant datepicker
+
+  "measurement_type": "NUMERIC", 
+
+  "target_value": 100,
+
+  "current_value": 10,
+
+  "baseline_value": 0,
+
+  "unit": "string",
+
+  "weight": 100,
+
+  "status": "DRAFT",
+
+  "progress_percentage": 10,
+
+  "is_stretch_goal": false,
+
+  "tags": [],
+
+  "is_specific": false,
+
+  "is_measurable": false,
+
+  "is_achievable": false,
+
+  "is_relevant": false,
+
+  "is_time_bound": false,
+
+  "objective_key": "string",
+
+  "is_key_result": false,
+
+  "employee_uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+
+  "framework_uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+
+  "parent_dept_goal_uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+
+  "parent_org_goal_uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+
+  "appraisal_cycle_uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+
+  "parent_objective_uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+}
+
+measurement_type: Dropdown
+class GoalMeasurementType(str, enum.Enum):
+
+    NUMERIC = "NUMERIC"         # e.g., Revenue: 1,000,000
+
+    PERCENTAGE = "PERCENTAGE"   # e.g., Customer satisfaction: 95%
+
+    BOOLEAN = "BOOLEAN"         # Completed / Not completed
+
+    MILESTONE = "MILESTONE"     # Milestone-based tracking
+
+status: Drodown
+
+class GoalStatus(str, enum.Enum):
+
+    DRAFT = "DRAFT"
+
+    ACTIVE = "ACTIVE"
+
+    ON_TRACK = "ON_TRACK"
+
+    AT_RISK = "AT_RISK"
+
+    BEHIND = "BEHIND"
+
+    COMPLETED = "COMPLETED"
+
+    CANCELLED = "CANCELLED"
+
+employee_uuid: searchable dropdwon
+
+curl -X 'GET' \
+  'http://127.0.0.1:8000/api/v1/employees/lookup?limit=100' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODE1MjAyNjksInN1YiI6IjFkM2Q3MDFiLTZkYjItNDAxMi1hNmYxLTM3Y2JkNGNmZmYxYyJ9.GqNAMSN3-pqS0L0H9yCrc_E0howPTYvm4Xw8UgS33SM'
+
+{
+  "success": true,
+  "data": [
+    {
+      "uuid": "51bb36d6-fc6d-4b98-910c-13b4a183ff01",
+      "full_name": "1 One Import Emp",
+      "employee_code": "EMP-0014",
+      "work_email": "1one.import@yopmail.com"
+    },
+    {
+      "uuid": "927df490-2da6-4cfb-afa9-c1e692ee46d4",
+      "full_name": "2 Two Import Emp",
+      "employee_code": "EMP-0015",
+      "work_email": "2two.import@yopmail.com"
+    },
+    {
+      "uuid": "9091186c-ed20-404c-9697-ff3cdbcca6b3",
+      "full_name": "Emp Five Las Five",
+      "employee_code": "005",
+      "work_email": "empfour@emp.com"
+    },
+    {
+      "uuid": "ff659a5a-5fb4-4c6a-b7c6-5a8632d58315",
+      "full_name": "Emp One Las One",
+      "employee_code": "EMP-0001",
+      "work_email": "emp@emp.com"
+    },
+    {
+      "uuid": "8c35c518-edde-4cb3-be35-c0c4e78d724d",
+      "full_name": "Emp One Las One",
+      "employee_code": "EMP-0002",
+      "work_email": "emptwo@emp.com"
+    },
+    {
+      "uuid": "400bcf65-bcb2-4ba6-a2e8-1d38fbf361a3",
+      "full_name": "Emp One Update Las One Update",
+      "employee_code": "EMP-0003",
+      "work_email": "empthree@emp.com"
+    },
+    {
+      "uuid": "27cf8c98-6c30-45a8-88a6-d4d4754971df",
+      "full_name": "Emp Seven Las Seven",
+      "employee_code": "007",
+      "work_email": "emp.seven@yopmail.com"
+    },
+    {
+      "uuid": "508605fe-c27e-429e-aaec-ce7859a14ae6",
+      "full_name": "Emp Six Las Five",
+      "employee_code": "006",
+      "work_email": "emp.six@yopmail.com"
+    },
+    {
+      "uuid": "da5167ee-6c6c-4686-b7b6-1b864b1ccbcb",
+      "full_name": "Employee Login",
+      "employee_code": "EMP-08",
+      "work_email": "emp.login@yopmail.com"
+    },
+    {
+      "uuid": "f7a8e519-1eb1-4406-9e23-bf23835a7093",
+      "full_name": "HR Manager",
+      "employee_code": "S-02",
+      "work_email": "test.two@yopmail.com"
+    },
+    {
+      "uuid": "0d283091-cc45-4ace-b857-af56e82e2d28",
+      "full_name": "Kaushal S Shah S",
+      "employee_code": "S-03",
+      "work_email": "test.three@yopmail.com"
+    },
+    {
+      "uuid": "e7da4d8e-590b-4ad0-adf9-7d366d3d0c7c",
+      "full_name": "One Import Emp",
+      "employee_code": "EMP-0012",
+      "work_email": "one.import@yopmail.com"
+    },
+    {
+      "uuid": "d24a2f23-4811-4935-969b-619dcaf35021",
+      "full_name": "Testing One",
+      "employee_code": "EMP-008",
+      "work_email": "testing.one@yopmail.com"
+    }
+  ]
+}
+
+framework_uuid: searchable dropdwon
+
+curl -X 'GET' \
+  'http://127.0.0.1:8000/api/v1/performance/goals/lookup?page=1&limit=10' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODE1MjAyNjksInN1YiI6IjFkM2Q3MDFiLTZkYjItNDAxMi1hNmYxLTM3Y2JkNGNmZmYxYyJ9.GqNAMSN3-pqS0L0H9yCrc_E0howPTYvm4Xw8UgS33SM'
+
+{
+  "success": true,
+  "message": "Goal frameworks retrieved successfully",
+  "data": [
+    {
+      "name": "Test",
+      "framework_type": "OKR",
+      "description": "Test Descriptions",
+      "max_objectives_per_employee": 5,
+      "max_key_results_per_objective": 5,
+      "require_specific": true,
+      "require_measurable": true,
+      "require_time_bound": true,
+      "goal_weight_enabled": true,
+      "default_scoring_method": "weighted_average",
+      "is_active": true,
+      "uuid": "08ec3328-4ce7-4242-a25d-895c9d6f6b72",
+      "is_default": false,
+      "created_at": "2026-06-07T11:01:38",
+      "updated_at": "2026-06-07T11:01:38"
+    },
+    {
+      "name": "bn",
+      "framework_type": "OKR",
+      "description": "",
+      "max_objectives_per_employee": 5,
+      "max_key_results_per_objective": 5,
+      "require_specific": true,
+      "require_measurable": true,
+      "require_time_bound": true,
+      "goal_weight_enabled": true,
+      "default_scoring_method": "weighted_average",
+      "is_active": true,
+      "uuid": "41abcde0-97e8-4b25-b5e6-8ef938d97bf1",
+      "is_default": false,
+      "created_at": "2026-05-31T07:19:21",
+      "updated_at": "2026-06-07T09:12:40"
+    },
+    {
+      "name": "hj",
+      "framework_type": "OKR",
+      "description": "hj",
+      "max_objectives_per_employee": 5,
+      "max_key_results_per_objective": 5,
+      "require_specific": true,
+      "require_measurable": true,
+      "require_time_bound": true,
+      "goal_weight_enabled": true,
+      "default_scoring_method": "weighted_average",
+      "is_active": true,
+      "uuid": "0eb929fe-3b72-4942-a601-7132a9e7e2f6",
+      "is_default": true,
+      "created_at": "2026-05-31T07:19:16",
+      "updated_at": "2026-06-07T09:12:40"
+    }
+  ],
+  "pagination": {
+    "total_records": 3,
+    "current_page": 1,
+    "total_pages": 1,
+    "page_size": 10
+  }
+}
+
+parent_dept_goal_uuid: searchable
+

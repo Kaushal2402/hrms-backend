@@ -8,7 +8,8 @@ from app.api.v1.api import api_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    swagger_ui_parameters={"persistAuthorization": True}
 )
 
 # Ensure upload directory exists

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel, UUID4, Field
 from typing import List, Optional, Union, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
@@ -26,10 +26,10 @@ class DeptGoalBase(BaseModel):
         from_attributes = True
 
 class DeptGoalCreate(DeptGoalBase):
-    department_id: Union[int, UUID4, str]
-    framework_id: Union[int, UUID4, str]
-    owner_id: Union[int, UUID4, str]
-    parent_org_goal_id: Optional[Union[int, UUID4, str]] = None
+    department_uuid: UUID4
+    framework_uuid: UUID4
+    owner_uuid: UUID4
+    parent_org_goal_uuid: Optional[UUID4] = None
 
 class DeptGoalUpdate(BaseModel):
     title: Optional[str] = None
@@ -45,10 +45,10 @@ class DeptGoalUpdate(BaseModel):
     weight: Optional[Decimal] = None
     progress_percentage: Optional[Decimal] = None
     tags: Optional[List[str]] = None
-    department_id: Optional[Union[int, UUID4, str]] = None
-    framework_id: Optional[Union[int, UUID4, str]] = None
-    owner_id: Optional[Union[int, UUID4, str]] = None
-    parent_org_goal_id: Optional[Union[int, UUID4, str]] = None
+    department_uuid: Optional[UUID4] = None
+    framework_uuid: Optional[UUID4] = None
+    owner_uuid: Optional[UUID4] = None
+    parent_org_goal_uuid: Optional[UUID4] = None
 
     class Config:
         from_attributes = True
@@ -59,7 +59,7 @@ class DeptGoalStatusUpdate(BaseModel):
 
 class DepartmentBasicSchema(BaseModel):
     uuid: UUID4
-    name: str
+    name: str = Field(validation_alias='department_name')
 
     class Config:
         from_attributes = True
@@ -83,4 +83,17 @@ class DeptGoalResponse(BaseModel):
     data: Optional[DeptGoalSchema] = None
 
 class DeptGoalListResponse(PaginatedResponse[List[DeptGoalSchema]]):
+    pass
+
+class DeptGoalLookupSchema(BaseModel):
+    uuid: UUID4
+    title: str
+    status: GoalStatus
+    department_name: Optional[str] = None
+    progress_percentage: Optional[Decimal] = Decimal("0.00")
+
+    class Config:
+        from_attributes = True
+
+class DeptGoalLookupResponse(PaginatedResponse[List[DeptGoalLookupSchema]]):
     pass

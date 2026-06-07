@@ -13,7 +13,8 @@ from app.models.performance import OrganizationGoal, GoalFramework, DepartmentGo
 from app.schemas.performance_org_goals import (
     OrgGoalCreate, OrgGoalUpdate, OrgGoalStatusUpdate, OrgGoalSchema,
     OrgGoalResponse, OrgGoalListResponse, OrgGoalSummaryResponse,
-    OrgGoalSummarySchema, GoalCascadeItem, GoalCascadeResponse
+    OrgGoalSummarySchema, GoalCascadeItem, GoalCascadeResponse,
+    OrgGoalLookupResponse
 )
 
 router = APIRouter()
@@ -81,6 +82,29 @@ def _resolve_ids(db: Session, org_id: int, payload) -> tuple[int, int]:
 
     return framework_id, owner_id
 
+@router.get("/lookup/", response_model=OrgGoalLookupResponse)
+def lookup_org_goals(
+    search: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
+):
+    """Lookup API for dropdowns and cross-module references. No RBAC restriction, just auth check."""
+    org_id = _get_org_id(current_user)
+    
+    query = db.query(OrganizationGoal).filter(OrganizationGoal.organization_id == org_id)
+    
+    if search:
+        query = query.filter(OrganizationGoal.title.ilike(f"%{search}%"))
+        
+    items = query.order_by(OrganizationGoal.title.asc()).limit(limit).all()
+    
+    return {
+        "success": True,
+        "message": "Organization goals lookup retrieved successfully",
+        "data": items
+    }
+
 @router.get("/", response_model=OrgGoalListResponse)
 def list_org_goals(
     fiscal_year: Optional[str] = None,
@@ -97,16 +121,9 @@ def list_org_goals(
 ):
     org_id = _get_org_id(current_user)
     
-    # Check if employee has READ permission
-    has_read = True
-    if not isinstance(current_user, Organization):
-        has_read = deps.has_permission(db, current_user, PerformancePermissions.READ)
-        
-    query = db.query(OrganizationGoal).filter(OrganizationGoal.organization_id == org_id)
+    _require_permission(db, current_user, PerformancePermissions.READ, "list organizational goals")
     
-    # Filter public goals if employee doesn't have read permission
-    if not has_read:
-        query = query.filter(OrganizationGoal.is_public == True)
+    query = db.query(OrganizationGoal).filter(OrganizationGoal.organization_id == org_id)
 
     if search:
         query = query.filter(
@@ -225,18 +242,9 @@ def get_org_goals_summary(
 ):
     org_id = _get_org_id(current_user)
     
-    # Check access (HR Admin or Manager or Public-only)
-    has_read = True
-    is_mgr = False
-    if not isinstance(current_user, Organization):
-        has_read = deps.has_permission(db, current_user, PerformancePermissions.READ)
-        is_mgr = _is_manager(db, current_user.id)
+    _require_permission(db, current_user, PerformancePermissions.READ, "view organizational goals summary")
         
     query = db.query(OrganizationGoal).filter(OrganizationGoal.organization_id == org_id)
-    
-    # Filter public goals if employee doesn't have read/manager permission
-    if not has_read and not is_mgr:
-        query = query.filter(OrganizationGoal.is_public == True)
         
     if fiscal_year:
         query = query.filter(OrganizationGoal.fiscal_year == fiscal_year)
@@ -354,14 +362,7 @@ def get_org_goal(
     if not db_item:
         raise HTTPException(status_code=404, detail="Organization goal not found")
 
-    # Organization: unrestricted access
-    # Employee with READ permission: access any goal
-    # Employee without permission: only own goal (owner or creator)
-    if not isinstance(current_user, Organization):
-        has_read = deps.has_permission(db, current_user, PerformancePermissions.READ)
-        is_own = (db_item.owner_id == current_user.id) or (db_item.created_by == current_user.id)
-        if not has_read and not is_own:
-            raise HTTPException(status_code=403, detail="You can only access your own goals.")
+    _require_permission(db, current_user, PerformancePermissions.READ, "view organizational goal")
 
     return {
         "success": True,
@@ -385,12 +386,7 @@ def update_org_goal(
     if db_item.status in [GoalStatus.COMPLETED, GoalStatus.CANCELLED]:
         raise HTTPException(status_code=400, detail=f"Cannot update goal because its status is {db_item.status}")
         
-    # Check access (HR Admin or Owner)
-    if not isinstance(current_user, Organization):
-        has_update = deps.has_permission(db, current_user, PerformancePermissions.UPDATE)
-        is_owner = (db_item.owner_id == current_user.id)
-        if not has_update and not is_owner:
-            raise HTTPException(status_code=403, detail="You do not have permission to update this goal")
+    _require_permission(db, current_user, PerformancePermissions.UPDATE, "update organizational goal")
             
     # Resolve optional FKs
     framework_id, owner_id = _resolve_ids(db, org_id, payload)
@@ -435,12 +431,7 @@ def update_org_goal_status(
     if db_item.status in [GoalStatus.COMPLETED, GoalStatus.CANCELLED]:
         raise HTTPException(status_code=400, detail=f"Cannot change status because the goal is already {db_item.status}")
         
-    # Check access (HR Admin or Owner)
-    if not isinstance(current_user, Organization):
-        has_update = deps.has_permission(db, current_user, PerformancePermissions.UPDATE)
-        is_owner = (db_item.owner_id == current_user.id)
-        if not has_update and not is_owner:
-            raise HTTPException(status_code=403, detail="You do not have permission to update this goal status")
+    _require_permission(db, current_user, PerformancePermissions.UPDATE, "update organizational goal status")
             
     db_item.status = payload.status
     if payload.notes is not None:
@@ -491,14 +482,7 @@ def get_org_goal_cascade(
     if not org_goal:
         raise HTTPException(status_code=404, detail="Organization goal not found")
 
-    # Organization: unrestricted
-    # Employee with READ permission: access any
-    # Employee without permission: only own goal
-    if not isinstance(current_user, Organization):
-        has_read = deps.has_permission(db, current_user, PerformancePermissions.READ)
-        is_own = (org_goal.owner_id == current_user.id) or (org_goal.created_by == current_user.id)
-        if not has_read and not is_own:
-            raise HTTPException(status_code=403, detail="You can only view cascade for your own goals.")
+    _require_permission(db, current_user, PerformancePermissions.READ, "view organizational goal cascade")
         
     # Build tree
     org_node = GoalCascadeItem(

@@ -274,6 +274,9 @@ class DepartmentGoal(Base):
     created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    is_deleted = Column(Boolean, default=False, nullable=False)
+    deleted_at = Column(DateTime, nullable=True)
 
     # Relationships
     organization = relationship("Organization")
