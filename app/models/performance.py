@@ -350,6 +350,8 @@ class EmployeeGoal(Base):
     tags = Column(JSON, default=list)
     attachments = Column(JSON, default=list)
 
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+
     created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -365,6 +367,38 @@ class EmployeeGoal(Base):
     manager = relationship("Employee", foreign_keys=[manager_id])
     approved_by_employee = relationship("Employee", foreign_keys=[approved_by])
     creator = relationship("Employee", foreign_keys=[created_by])
+
+    @property
+    def employee_uuid(self):
+        return self.employee.uuid if self.employee else None
+        
+    @property
+    def framework_uuid(self):
+        return self.framework.uuid if self.framework else None
+        
+    @property
+    def parent_dept_goal_uuid(self):
+        return self.parent_dept_goal.uuid if self.parent_dept_goal else None
+        
+    @property
+    def parent_org_goal_uuid(self):
+        return self.parent_org_goal.uuid if self.parent_org_goal else None
+        
+    @property
+    def parent_dept_goal_title(self):
+        return self.parent_dept_goal.title if self.parent_dept_goal else None
+        
+    @property
+    def parent_org_goal_title(self):
+        return self.parent_org_goal.title if self.parent_org_goal else None
+        
+    @property
+    def appraisal_cycle_uuid(self):
+        return self.appraisal_cycle.uuid if self.appraisal_cycle else None
+        
+    @property
+    def parent_objective_uuid(self):
+        return self.parent_objective.uuid if self.parent_objective else None
 
     __table_args__ = (
         Index("idx_emp_goal_emp_status", "employee_id", "status"),
