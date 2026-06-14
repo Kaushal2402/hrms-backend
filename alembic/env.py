@@ -1,7 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool, text, Engine, event
 
 from alembic import context
 
@@ -13,6 +12,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from app.core.config import settings
 from app.db.base import Base
+
+@event.listens_for(Engine, "connect")
+def disable_fk_checks(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("SET FOREIGN_KEY_CHECKS=0")
+    except Exception:
+        pass
+    finally:
+        cursor.close()
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -537,11 +537,22 @@ class AppraisalCycle(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # History
+    advance_history = Column(JSON, default=list)
+
     # Relationships
     organization = relationship("Organization")
     template = relationship("AppraisalTemplate", foreign_keys=[template_id])
     rating_scale = relationship("RatingScale", foreign_keys=[rating_scale_id])
     creator = relationship("Employee", foreign_keys=[created_by])
+
+    @property
+    def template_uuid(self):
+        return self.template.uuid if self.template else None
+
+    @property
+    def rating_scale_uuid(self):
+        return self.rating_scale.uuid if self.rating_scale else None
 
     __table_args__ = (
         UniqueConstraint("organization_id", "name", name="uq_appraisal_cycle_name"),

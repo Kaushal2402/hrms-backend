@@ -723,3 +723,97 @@ class BellCurveOutliersResponse(BaseModel):
     success: bool
     message: str
     data: List[BellCurveOutlierItem]
+
+
+# ============================================================
+# RATING SCALES & TEMPLATES SCHEMAS
+# ============================================================
+
+class RatingScaleSchema(BaseModel):
+    uuid: UUID4
+    name: str
+    description: Optional[str] = None
+    is_default: bool
+    is_active: bool
+    scale_points: List[Any]
+    min_value: Decimal
+    max_value: Decimal
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RatingScaleListResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[RatingScaleSchema]
+    pagination: Optional[dict] = None
+
+
+class RatingScaleLookupSchema(BaseModel):
+    uuid: UUID4
+    name: str
+    min_value: Decimal
+    max_value: Decimal
+
+    class Config:
+        from_attributes = True
+
+
+class RatingScaleLookupResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[RatingScaleLookupSchema]
+
+
+class AppraisalTemplateSchema(BaseModel):
+    uuid: UUID4
+    name: str
+    description: Optional[str] = None
+    is_active: bool
+    is_default: bool
+    applicable_roles: List[Any]
+    applicable_departments: List[Any]
+    applicable_grades: List[Any]
+    goal_section_weight: Decimal
+    competency_section_weight: Decimal
+    behavior_section_weight: Decimal
+    other_section_weight: Decimal
+    self_appraisal_enabled: bool
+    self_rating_visible_to_manager: bool
+    employee_comments_enabled: bool
+    manager_override_enabled: bool
+    final_rating_formula: str
+    version: int
+    rating_scale: Optional[RatingScaleSummary] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalTemplateListResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[AppraisalTemplateSchema]
+    pagination: Optional[dict] = None
+
+
+class AppraisalTemplateLookupSchema(BaseModel):
+    uuid: UUID4
+    name: str
+    is_active: bool
+    is_default: bool
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalTemplateLookupResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[AppraisalTemplateLookupSchema]
+

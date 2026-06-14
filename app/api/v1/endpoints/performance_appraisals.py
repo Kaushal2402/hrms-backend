@@ -83,7 +83,11 @@ from app.schemas.performance_appraisals import (
     BellCurveOutlierItem,
     EmployeePerformanceSummary,
     AppraisalCycleSummary,
-    RatingScaleSummary
+    RatingScaleSummary,
+    RatingScaleListResponse,
+    RatingScaleLookupResponse,
+    AppraisalTemplateListResponse,
+    AppraisalTemplateLookupResponse
 )
 
 router = APIRouter()
@@ -1729,3 +1733,118 @@ def get_bell_curve_outliers(
         message="Bell curve outliers retrieved successfully",
         data=outliers
     )
+
+
+# ============================================================
+# TEMPLATES ROUTER & ENDPOINTS
+# ============================================================
+
+templates_router = APIRouter()
+
+@templates_router.get("/", response_model=AppraisalTemplateListResponse)
+def get_templates(
+    is_active: Optional[bool] = None,
+    is_default: Optional[bool] = None,
+    applicable_department: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.READ, "list appraisal templates")
+    org_id = _get_org_id(current_user)
+    
+    query = db.query(AppraisalTemplate).filter(AppraisalTemplate.organization_id == org_id)
+    if is_active is not None:
+        query = query.filter(AppraisalTemplate.is_active == is_active)
+    if is_default is not None:
+        query = query.filter(AppraisalTemplate.is_default == is_default)
+    if applicable_department:
+        query = query.filter(func.json_contains(AppraisalTemplate.applicable_departments, func.json_quote(applicable_department)))
+        
+    total = query.count()
+    items = query.order_by(AppraisalTemplate.name.asc()).offset((page - 1) * limit).limit(limit).all()
+    
+    return AppraisalTemplateListResponse(
+        success=True,
+        message="Appraisal templates retrieved successfully",
+        data=items,
+        pagination={"total_records": total, "current_page": page, "total_pages": (total + limit - 1) // limit, "page_size": limit}
+    )
+
+
+@templates_router.get("/lookup", response_model=AppraisalTemplateLookupResponse)
+def lookup_templates(
+    search: Optional[str] = None,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    org_id = _get_org_id(current_user)
+    query = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.organization_id == org_id,
+        AppraisalTemplate.is_active == True
+    )
+    if search:
+        query = query.filter(AppraisalTemplate.name.ilike(f"%{search}%"))
+    items = query.order_by(AppraisalTemplate.name.asc()).all()
+    
+    return AppraisalTemplateLookupResponse(
+        success=True,
+        message="Appraisal templates lookup retrieved successfully",
+        data=items
+    )
+
+
+# ============================================================
+# RATING SCALES ROUTER & ENDPOINTS
+# ============================================================
+
+scales_router = APIRouter()
+
+@scales_router.get("/", response_model=RatingScaleListResponse)
+def get_scales(
+    is_active: Optional[bool] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.READ, "list rating scales")
+    org_id = _get_org_id(current_user)
+    
+    query = db.query(RatingScale).filter(RatingScale.organization_id == org_id)
+    if is_active is not None:
+        query = query.filter(RatingScale.is_active == is_active)
+        
+    total = query.count()
+    items = query.order_by(RatingScale.name.asc()).offset((page - 1) * limit).limit(limit).all()
+    
+    return RatingScaleListResponse(
+        success=True,
+        message="Rating scales retrieved successfully",
+        data=items,
+        pagination={"total_records": total, "current_page": page, "total_pages": (total + limit - 1) // limit, "page_size": limit}
+    )
+
+
+@scales_router.get("/lookup", response_model=RatingScaleLookupResponse)
+def lookup_scales(
+    search: Optional[str] = None,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    org_id = _get_org_id(current_user)
+    query = db.query(RatingScale).filter(
+        RatingScale.organization_id == org_id,
+        RatingScale.is_active == True
+    )
+    if search:
+        query = query.filter(RatingScale.name.ilike(f"%{search}%"))
+    items = query.order_by(RatingScale.name.asc()).all()
+    
+    return RatingScaleLookupResponse(
+        success=True,
+        message="Rating scales lookup retrieved successfully",
+        data=items
+    )
+
