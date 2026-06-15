@@ -580,7 +580,7 @@ class RatingScale(Base):
     min_value = Column(Numeric(5, 2), nullable=False)
     max_value = Column(Numeric(5, 2), nullable=False)
 
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

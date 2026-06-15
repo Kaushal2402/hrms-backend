@@ -85,6 +85,10 @@ from app.schemas.performance_appraisals import (
     AppraisalCycleSummary,
     RatingScaleSummary,
     RatingScaleListResponse,
+    RatingScaleDetailResponse,
+    RatingScaleCreate,
+    RatingScaleUpdate,
+    RatingScaleUsageResponse,
     RatingScaleLookupResponse,
     AppraisalTemplateListResponse,
     AppraisalTemplateLookupResponse
@@ -93,6 +97,8 @@ from app.schemas.performance_appraisals import (
 router = APIRouter()
 
 class PerformancePermissions:
+    MANAGE = "209"
+    SETUP = "210"
     READ = "213"
     UPDATE = "214"
     APPROVE = "215"
@@ -1804,6 +1810,9 @@ scales_router = APIRouter()
 @scales_router.get("/", response_model=RatingScaleListResponse)
 def get_scales(
     is_active: Optional[bool] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = Query("name"),
+    sort_order: Optional[str] = Query("asc"),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(deps.get_db),
@@ -1816,8 +1825,21 @@ def get_scales(
     if is_active is not None:
         query = query.filter(RatingScale.is_active == is_active)
         
+    if search:
+        query = query.filter(RatingScale.name.ilike(f"%{search}%"))
+        
+    allowed_sort_fields = {
+        "name": RatingScale.name,
+        "created_at": RatingScale.created_at,
+    }
+    sort_field = allowed_sort_fields.get(sort_by, RatingScale.name)
+    if sort_order == "desc":
+        query = query.order_by(sort_field.desc())
+    else:
+        query = query.order_by(sort_field.asc())
+        
     total = query.count()
-    items = query.order_by(RatingScale.name.asc()).offset((page - 1) * limit).limit(limit).all()
+    items = query.offset((page - 1) * limit).limit(limit).all()
     
     return RatingScaleListResponse(
         success=True,
@@ -1846,5 +1868,250 @@ def lookup_scales(
         success=True,
         message="Rating scales lookup retrieved successfully",
         data=items
+    )
+
+
+@scales_router.get("/{scale_id}", response_model=RatingScaleDetailResponse)
+def get_scale_detail(
+    scale_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.READ, "view rating scale")
+    org_id = _get_org_id(current_user)
+    
+    scale = db.query(RatingScale).filter(
+        RatingScale.uuid == scale_id,
+        RatingScale.organization_id == org_id
+    ).first()
+    
+    if not scale:
+        raise HTTPException(status_code=404, detail="Rating scale not found")
+        
+    return RatingScaleDetailResponse(
+        success=True,
+        message="Rating scale retrieved successfully",
+        data=scale
+    )
+
+@scales_router.post("/", response_model=RatingScaleDetailResponse, status_code=201)
+def create_rating_scale(
+    scale_in: RatingScaleCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.MANAGE, "create rating scale")
+    org_id = _get_org_id(current_user)
+    
+    # Check for duplicate name
+    existing_scale = db.query(RatingScale).filter(
+        RatingScale.organization_id == org_id,
+        RatingScale.name == scale_in.name
+    ).first()
+    if existing_scale:
+        raise HTTPException(status_code=400, detail="A rating scale with this name already exists in your organization.")
+        
+    # Handle is_default logic
+    if scale_in.is_default:
+        db.query(RatingScale).filter(
+            RatingScale.organization_id == org_id,
+            RatingScale.is_default == True
+        ).update({"is_default": False})
+        
+    creator_id = current_user.id if not isinstance(current_user, Organization) else None
+        
+    new_scale = RatingScale(
+        organization_id=org_id,
+        name=scale_in.name,
+        description=scale_in.description,
+        is_default=scale_in.is_default,
+        is_active=scale_in.is_active,
+        scale_points=[p.dict() for p in scale_in.scale_points],
+        min_value=scale_in.min_value,
+        max_value=scale_in.max_value,
+        created_by=creator_id
+    )
+    db.add(new_scale)
+    db.commit()
+    db.refresh(new_scale)
+    
+    return RatingScaleDetailResponse(
+        success=True,
+        message="Rating scale created successfully",
+        data=new_scale
+    )
+
+@scales_router.put("/{scale_id}", response_model=RatingScaleDetailResponse)
+def update_rating_scale(
+    scale_id: uuid.UUID,
+    scale_in: RatingScaleUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.MANAGE, "update rating scale")
+    org_id = _get_org_id(current_user)
+    
+    scale = db.query(RatingScale).filter(
+        RatingScale.uuid == scale_id,
+        RatingScale.organization_id == org_id
+    ).first()
+    
+    if not scale:
+        raise HTTPException(status_code=404, detail="Rating scale not found")
+        
+    # Check if used in active cycle
+    is_used = db.query(AppraisalRecord).join(
+        AppraisalCycle, AppraisalRecord.appraisal_cycle_id == AppraisalCycle.id
+    ).filter(
+        AppraisalRecord.rating_scale_id == scale.id,
+        AppraisalCycle.status != CycleStatus.DRAFT,
+        AppraisalCycle.status != CycleStatus.ARCHIVED
+    ).first()
+    
+    if is_used:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot update a rating scale that is currently in use by an active appraisal cycle."
+        )
+        
+    # Update fields
+    update_data = scale_in.dict(exclude_unset=True)
+    
+    if "name" in update_data and update_data["name"] != scale.name:
+        existing_scale = db.query(RatingScale).filter(
+            RatingScale.organization_id == org_id,
+            RatingScale.name == update_data["name"]
+        ).first()
+        if existing_scale:
+            raise HTTPException(status_code=400, detail="A rating scale with this name already exists in your organization.")
+            
+    if update_data.get("is_default"):
+        db.query(RatingScale).filter(
+            RatingScale.organization_id == org_id,
+            RatingScale.is_default == True,
+            RatingScale.id != scale.id
+        ).update({"is_default": False})
+        
+    for key, value in update_data.items():
+        if key == "scale_points":
+            setattr(scale, key, [p.dict() for p in scale_in.scale_points] if scale_in.scale_points else [])
+        else:
+            setattr(scale, key, value)
+            
+    db.commit()
+    db.refresh(scale)
+    
+    return RatingScaleDetailResponse(
+        success=True,
+        message="Rating scale updated successfully",
+        data=scale
+    )
+
+@scales_router.patch("/{scale_id}/set-default", response_model=RatingScaleDetailResponse)
+def set_default_rating_scale(
+    scale_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.MANAGE, "update rating scale")
+    org_id = _get_org_id(current_user)
+    
+    scale = db.query(RatingScale).filter(
+        RatingScale.uuid == scale_id,
+        RatingScale.organization_id == org_id
+    ).first()
+    
+    if not scale:
+        raise HTTPException(status_code=404, detail="Rating scale not found")
+        
+    if not scale.is_default:
+        db.query(RatingScale).filter(
+            RatingScale.organization_id == org_id,
+            RatingScale.is_default == True,
+            RatingScale.id != scale.id
+        ).update({"is_default": False})
+        
+        scale.is_default = True
+        db.commit()
+        db.refresh(scale)
+        
+    return RatingScaleDetailResponse(
+        success=True,
+        message="Rating scale set as default successfully",
+        data=scale
+    )
+
+@scales_router.delete("/{scale_id}")
+def delete_rating_scale(
+    scale_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.MANAGE, "delete rating scale")
+    org_id = _get_org_id(current_user)
+    
+    scale = db.query(RatingScale).filter(
+        RatingScale.uuid == scale_id,
+        RatingScale.organization_id == org_id
+    ).first()
+    
+    if not scale:
+        raise HTTPException(status_code=404, detail="Rating scale not found")
+        
+    # Check if used in any AppraisalTemplate
+    used_in_templates = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.rating_scale_id == scale.id,
+        AppraisalTemplate.is_active == True
+    ).first()
+    
+    # Check if used in any AppraisalCycle (direct link)
+    used_in_cycles = db.query(AppraisalCycle).filter(
+        AppraisalCycle.rating_scale_id == scale.id,
+        AppraisalCycle.status != CycleStatus.ARCHIVED
+    ).first()
+    
+    if used_in_templates or used_in_cycles:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot delete a rating scale that is currently in use by active templates or cycles."
+        )
+        
+    scale.is_active = False
+    db.commit()
+    
+    return {"success": True, "message": "Rating scale deleted successfully"}
+
+@scales_router.get("/{scale_id}/usage", response_model=RatingScaleUsageResponse)
+def get_rating_scale_usage(
+    scale_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.READ, "view rating scale")
+    org_id = _get_org_id(current_user)
+    
+    scale = db.query(RatingScale).filter(
+        RatingScale.uuid == scale_id,
+        RatingScale.organization_id == org_id
+    ).first()
+    
+    if not scale:
+        raise HTTPException(status_code=404, detail="Rating scale not found")
+        
+    templates = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.rating_scale_id == scale.id
+    ).all()
+    
+    cycles = db.query(AppraisalCycle).filter(
+        AppraisalCycle.rating_scale_id == scale.id
+    ).all()
+    
+    return RatingScaleUsageResponse(
+        success=True,
+        message="Rating scale usage retrieved successfully",
+        data={
+            "templates": [{"uuid": str(t.uuid), "name": t.name} for t in templates],
+            "cycles": [{"uuid": str(c.uuid), "name": c.name} for c in cycles]
+        }
     )
 

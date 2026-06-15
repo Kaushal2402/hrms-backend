@@ -729,6 +729,31 @@ class BellCurveOutliersResponse(BaseModel):
 # RATING SCALES & TEMPLATES SCHEMAS
 # ============================================================
 
+class RatingScalePointSchema(BaseModel):
+    value: float
+    label: str
+    description: Optional[str] = None
+    color: Optional[str] = None
+    is_passing: Optional[bool] = False
+
+class RatingScaleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    scale_points: List[RatingScalePointSchema]
+    min_value: Decimal
+    max_value: Decimal
+    is_default: bool = False
+    is_active: bool = True
+
+class RatingScaleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    scale_points: Optional[List[RatingScalePointSchema]] = None
+    min_value: Optional[Decimal] = None
+    max_value: Optional[Decimal] = None
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+
 class RatingScaleSchema(BaseModel):
     uuid: UUID4
     name: str
@@ -752,6 +777,12 @@ class RatingScaleListResponse(BaseModel):
     pagination: Optional[dict] = None
 
 
+class RatingScaleDetailResponse(BaseModel):
+    success: bool
+    message: str
+    data: RatingScaleSchema
+
+
 class RatingScaleLookupSchema(BaseModel):
     uuid: UUID4
     name: str
@@ -766,6 +797,19 @@ class RatingScaleLookupResponse(BaseModel):
     success: bool
     message: str
     data: List[RatingScaleLookupSchema]
+
+class UsageItemSchema(BaseModel):
+    uuid: UUID4
+    name: str
+
+class RatingScaleUsageSchema(BaseModel):
+    templates: List[UsageItemSchema]
+    cycles: List[UsageItemSchema]
+
+class RatingScaleUsageResponse(BaseModel):
+    success: bool
+    message: str
+    data: RatingScaleUsageSchema
 
 
 class AppraisalTemplateSchema(BaseModel):
