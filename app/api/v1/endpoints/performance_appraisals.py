@@ -10,6 +10,7 @@ from sqlalchemy import or_, and_, func
 from app.api import deps
 from app.models.organization import Organization
 from app.models.employee import Employee, Department
+from app.models.rbac import Role
 from app.models.performance import (
     AppraisalRecord,
     SelfAppraisal,
@@ -21,6 +22,7 @@ from app.models.performance import (
     AppraisalCycle,
     AppraisalTemplate,
     RatingScale,
+    AppraisalSection,
     AppraisalQuestion,
     EmployeeGoal,
     CompetencyFramework,
@@ -91,7 +93,10 @@ from app.schemas.performance_appraisals import (
     RatingScaleUsageResponse,
     RatingScaleLookupResponse,
     AppraisalTemplateListResponse,
-    AppraisalTemplateLookupResponse
+    AppraisalTemplateLookupResponse,
+    AppraisalTemplateDetailResponse,
+    AppraisalTemplateCreate,
+    AppraisalTemplateUpdate
 )
 
 router = APIRouter()
@@ -1749,9 +1754,12 @@ templates_router = APIRouter()
 
 @templates_router.get("/", response_model=AppraisalTemplateListResponse)
 def get_templates(
+    search: Optional[str] = None,
     is_active: Optional[bool] = None,
     is_default: Optional[bool] = None,
     applicable_department: Optional[str] = None,
+    sort_by: Optional[str] = Query("created_at", description="Field to sort by"),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Sort order (asc or desc)"),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(deps.get_db),
@@ -1761,6 +1769,15 @@ def get_templates(
     org_id = _get_org_id(current_user)
     
     query = db.query(AppraisalTemplate).filter(AppraisalTemplate.organization_id == org_id)
+    
+    if search:
+        query = query.filter(
+            or_(
+                AppraisalTemplate.name.ilike(f"%{search}%"),
+                AppraisalTemplate.description.ilike(f"%{search}%")
+            )
+        )
+        
     if is_active is not None:
         query = query.filter(AppraisalTemplate.is_active == is_active)
     if is_default is not None:
@@ -1769,13 +1786,68 @@ def get_templates(
         query = query.filter(func.json_contains(AppraisalTemplate.applicable_departments, func.json_quote(applicable_department)))
         
     total = query.count()
-    items = query.order_by(AppraisalTemplate.name.asc()).offset((page - 1) * limit).limit(limit).all()
+    
+    if sort_by and hasattr(AppraisalTemplate, sort_by):
+        column = getattr(AppraisalTemplate, sort_by)
+        if sort_order == "desc":
+            query = query.order_by(column.desc())
+        else:
+            query = query.order_by(column.asc())
+    else:
+        query = query.order_by(AppraisalTemplate.created_at.desc())
+        
+    items = query.offset((page - 1) * limit).limit(limit).all()
+    
+    roles_dict = {}
+    depts_dict = {}
+    for item in items:
+        for r_uuid in (item.applicable_roles or []):
+            roles_dict[str(r_uuid)] = None
+        for d_uuid in (item.applicable_departments or []):
+            depts_dict[str(d_uuid)] = None
+
+    if roles_dict:
+        roles_db = db.query(Role).filter(Role.uuid.in_(roles_dict.keys()), Role.organization_id == org_id).all()
+        for r in roles_db:
+            roles_dict[str(r.uuid)] = {"uuid": r.uuid, "name": r.role_name}
+    
+    if depts_dict:
+        depts_db = db.query(Department).filter(Department.uuid.in_(depts_dict.keys()), Department.organization_id == org_id).all()
+        for d in depts_db:
+            depts_dict[str(d.uuid)] = {"uuid": d.uuid, "name": d.department_name}
+            
+    hydrated_items = []
+    for item in items:
+        item_dict = {
+            "uuid": item.uuid,
+            "name": item.name,
+            "description": item.description,
+            "is_active": item.is_active,
+            "is_default": item.is_default,
+            "applicable_roles": [roles_dict.get(str(r_uuid)) for r_uuid in (item.applicable_roles or []) if roles_dict.get(str(r_uuid))],
+            "applicable_departments": [depts_dict.get(str(d_uuid)) for d_uuid in (item.applicable_departments or []) if depts_dict.get(str(d_uuid))],
+            "applicable_grades": item.applicable_grades or [],
+            "goal_section_weight": item.goal_section_weight,
+            "competency_section_weight": item.competency_section_weight,
+            "behavior_section_weight": item.behavior_section_weight,
+            "other_section_weight": item.other_section_weight,
+            "self_appraisal_enabled": item.self_appraisal_enabled,
+            "self_rating_visible_to_manager": item.self_rating_visible_to_manager,
+            "employee_comments_enabled": item.employee_comments_enabled,
+            "manager_override_enabled": item.manager_override_enabled,
+            "final_rating_formula": item.final_rating_formula,
+            "version": item.version,
+            "rating_scale": item.rating_scale,
+            "created_at": item.created_at,
+            "updated_at": item.updated_at,
+        }
+        hydrated_items.append(item_dict)
     
     return AppraisalTemplateListResponse(
         success=True,
         message="Appraisal templates retrieved successfully",
-        data=items,
-        pagination={"total_records": total, "current_page": page, "total_pages": (total + limit - 1) // limit, "page_size": limit}
+        data=hydrated_items,
+        pagination={"total_records": total, "current_page": page, "total_pages": (total + limit - 1) // limit if total > 0 else 0, "page_size": limit}
     )
 
 
@@ -1799,6 +1871,339 @@ def lookup_templates(
         message="Appraisal templates lookup retrieved successfully",
         data=items
     )
+
+@templates_router.get("/{template_id}", response_model=AppraisalTemplateDetailResponse)
+def get_template(
+    template_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, PerformancePermissions.READ, "view appraisal template")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    roles = []
+    if template.applicable_roles:
+        roles_db = db.query(Role).filter(Role.uuid.in_(template.applicable_roles), Role.organization_id == org_id).all()
+        roles = [{"uuid": r.uuid, "name": r.role_name} for r in roles_db]
+        
+    departments = []
+    if template.applicable_departments:
+        dept_db = db.query(Department).filter(Department.uuid.in_(template.applicable_departments), Department.organization_id == org_id).all()
+        departments = [{"uuid": d.uuid, "name": d.department_name} for d in dept_db]
+        
+    sections = db.query(AppraisalSection).filter(AppraisalSection.template_id == template.id).order_by(AppraisalSection.section_order.asc()).all()
+    template_dict = {
+        "uuid": template.uuid,
+        "name": template.name,
+        "description": template.description,
+        "is_active": template.is_active,
+        "is_default": template.is_default,
+        "applicable_roles": roles,
+        "applicable_departments": departments,
+        "applicable_grades": template.applicable_grades or [],
+        "goal_section_weight": template.goal_section_weight,
+        "competency_section_weight": template.competency_section_weight,
+        "behavior_section_weight": template.behavior_section_weight,
+        "other_section_weight": template.other_section_weight,
+        "self_appraisal_enabled": template.self_appraisal_enabled,
+        "self_rating_visible_to_manager": template.self_rating_visible_to_manager,
+        "employee_comments_enabled": template.employee_comments_enabled,
+        "manager_override_enabled": template.manager_override_enabled,
+        "final_rating_formula": template.final_rating_formula,
+        "version": template.version,
+        "rating_scale": template.rating_scale,
+        "created_at": template.created_at,
+        "updated_at": template.updated_at,
+        "sections": []
+    }
+    
+    for section in sections:
+        questions = db.query(AppraisalQuestion).filter(AppraisalQuestion.section_id == section.id).order_by(AppraisalQuestion.question_order.asc()).all()
+        sec_dict = {
+            "uuid": section.uuid,
+            "title": section.title,
+            "description": section.description,
+            "section_order": section.section_order,
+            "weight": section.weight,
+            "section_type": section.section_type,
+            "is_required": section.is_required,
+            "instructions": section.instructions,
+            "visible_to_employee": section.visible_to_employee,
+            "visible_to_manager": section.visible_to_manager,
+            "questions": []
+        }
+        for q in questions:
+            q_dict = {
+                "uuid": q.uuid,
+                "question_text": q.question_text,
+                "question_type": q.question_type,
+                "question_order": q.question_order,
+                "is_required": q.is_required,
+                "weight": q.weight,
+                "use_section_rating_scale": q.use_section_rating_scale,
+                "custom_rating_scale_uuid": q.custom_rating_scale.uuid if q.custom_rating_scale else None,
+                "custom_rating_scale": q.custom_rating_scale,
+                "choices": q.choices or [],
+                "allow_multiple_selection": q.allow_multiple_selection,
+                "competency_uuid": q.competency.uuid if q.competency else None,
+                "auto_populate_goals": q.auto_populate_goals,
+                "guidance": q.guidance,
+                "placeholder_text": q.placeholder_text
+            }
+            sec_dict["questions"].append(q_dict)
+            
+        template_dict["sections"].append(sec_dict)
+
+    return AppraisalTemplateDetailResponse(
+        success=True,
+        message="Appraisal template retrieved successfully",
+        data=template_dict
+    )
+
+@templates_router.post("/", response_model=AppraisalTemplateDetailResponse, status_code=status.HTTP_201_CREATED)
+def create_template(
+    payload: AppraisalTemplateCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "214", "create appraisal template")
+    org_id = _get_org_id(current_user)
+    
+    existing_template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.organization_id == org_id,
+        AppraisalTemplate.name == payload.name
+    ).first()
+    
+    if existing_template:
+        raise HTTPException(status_code=400, detail="An appraisal template with this name already exists.")
+        
+    rating_scale = db.query(RatingScale).filter(
+        RatingScale.uuid == payload.rating_scale_uuid,
+        RatingScale.organization_id == org_id
+    ).first()
+    if not rating_scale:
+        raise HTTPException(status_code=400, detail="Invalid rating scale UUID")
+        
+    if payload.is_default:
+        db.query(AppraisalTemplate).filter(
+            AppraisalTemplate.organization_id == org_id,
+            AppraisalTemplate.is_default == True
+        ).update({"is_default": False})
+
+    creator_id = None
+    if isinstance(current_user, Employee):
+        creator_id = current_user.id
+        
+    template = AppraisalTemplate(
+        organization_id=org_id,
+        rating_scale_id=rating_scale.id,
+        name=payload.name,
+        description=payload.description,
+        is_active=payload.is_active,
+        is_default=payload.is_default,
+        applicable_roles=[str(u) for u in payload.applicable_roles] if payload.applicable_roles else [],
+        applicable_departments=[str(u) for u in payload.applicable_departments] if payload.applicable_departments else [],
+        applicable_grades=payload.applicable_grades or [],
+        goal_section_weight=payload.goal_section_weight,
+        competency_section_weight=payload.competency_section_weight,
+        behavior_section_weight=payload.behavior_section_weight,
+        other_section_weight=payload.other_section_weight,
+        self_appraisal_enabled=payload.self_appraisal_enabled,
+        self_rating_visible_to_manager=payload.self_rating_visible_to_manager,
+        employee_comments_enabled=payload.employee_comments_enabled,
+        manager_override_enabled=payload.manager_override_enabled,
+        final_rating_formula=payload.final_rating_formula,
+        created_by=creator_id
+    )
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    
+    for sec_data in payload.sections:
+        section = AppraisalSection(
+            template_id=template.id,
+            title=sec_data.title,
+            description=sec_data.description,
+            section_order=sec_data.section_order,
+            weight=sec_data.weight,
+            section_type=sec_data.section_type,
+            is_required=sec_data.is_required,
+            instructions=sec_data.instructions,
+            visible_to_employee=sec_data.visible_to_employee,
+            visible_to_manager=sec_data.visible_to_manager
+        )
+        db.add(section)
+        db.flush() 
+        
+        for q_data in sec_data.questions:
+            custom_rs_id = None
+            if q_data.custom_rating_scale_uuid:
+                custom_rs = db.query(RatingScale).filter(RatingScale.uuid == q_data.custom_rating_scale_uuid, RatingScale.organization_id == org_id).first()
+                if custom_rs:
+                    custom_rs_id = custom_rs.id
+                    
+            comp_id = None
+            if q_data.competency_uuid:
+                comp = db.query(CompetencyFramework).filter(CompetencyFramework.uuid == q_data.competency_uuid, CompetencyFramework.organization_id == org_id).first()
+                if comp:
+                    comp_id = comp.id
+                    
+            question = AppraisalQuestion(
+                section_id=section.id,
+                question_text=q_data.question_text,
+                question_type=q_data.question_type,
+                question_order=q_data.question_order,
+                is_required=q_data.is_required,
+                weight=q_data.weight,
+                use_section_rating_scale=q_data.use_section_rating_scale,
+                custom_rating_scale_id=custom_rs_id,
+                choices=q_data.choices or [],
+                allow_multiple_selection=q_data.allow_multiple_selection,
+                competency_id=comp_id,
+                auto_populate_goals=q_data.auto_populate_goals,
+                guidance=q_data.guidance,
+                placeholder_text=q_data.placeholder_text
+            )
+            db.add(question)
+            
+    db.commit()
+    return get_template(template.uuid, db, current_user)
+
+@templates_router.put("/{template_id}", response_model=AppraisalTemplateDetailResponse)
+def update_template(
+    template_id: uuid.UUID,
+    payload: AppraisalTemplateUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "215", "update appraisal template")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    is_used = db.query(AppraisalCycle).filter(
+        AppraisalCycle.template_id == template.id,
+        AppraisalCycle.status != CycleStatus.DRAFT,
+        AppraisalCycle.status != CycleStatus.ARCHIVED
+    ).first()
+    
+    if is_used:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot update an appraisal template that is currently in use by an active appraisal cycle."
+        )
+        
+    if payload.name != template.name:
+        existing_template = db.query(AppraisalTemplate).filter(
+            AppraisalTemplate.organization_id == org_id,
+            AppraisalTemplate.name == payload.name
+        ).first()
+        if existing_template:
+            raise HTTPException(status_code=400, detail="An appraisal template with this name already exists.")
+
+    rating_scale = db.query(RatingScale).filter(
+        RatingScale.uuid == payload.rating_scale_uuid,
+        RatingScale.organization_id == org_id
+    ).first()
+    if not rating_scale:
+        raise HTTPException(status_code=400, detail="Invalid rating scale UUID")
+
+    if payload.is_default:
+        db.query(AppraisalTemplate).filter(
+            AppraisalTemplate.organization_id == org_id,
+            AppraisalTemplate.is_default == True,
+            AppraisalTemplate.id != template.id
+        ).update({"is_default": False})
+
+    template.name = payload.name
+    template.description = payload.description
+    template.rating_scale_id = rating_scale.id
+    template.is_active = payload.is_active
+    template.is_default = payload.is_default
+    template.applicable_roles = [str(u) for u in payload.applicable_roles] if payload.applicable_roles else []
+    template.applicable_departments = [str(u) for u in payload.applicable_departments] if payload.applicable_departments else []
+    template.applicable_grades = payload.applicable_grades or []
+    template.goal_section_weight = payload.goal_section_weight
+    template.competency_section_weight = payload.competency_section_weight
+    template.behavior_section_weight = payload.behavior_section_weight
+    template.other_section_weight = payload.other_section_weight
+    template.self_appraisal_enabled = payload.self_appraisal_enabled
+    template.self_rating_visible_to_manager = payload.self_rating_visible_to_manager
+    template.employee_comments_enabled = payload.employee_comments_enabled
+    template.manager_override_enabled = payload.manager_override_enabled
+    template.final_rating_formula = payload.final_rating_formula
+    
+    db.query(AppraisalQuestion).filter(
+        AppraisalQuestion.section_id.in_(
+            db.query(AppraisalSection.id).filter(AppraisalSection.template_id == template.id).subquery()
+        )
+    ).delete(synchronize_session=False)
+    db.query(AppraisalSection).filter(AppraisalSection.template_id == template.id).delete(synchronize_session=False)
+    
+    for sec_data in payload.sections:
+        section = AppraisalSection(
+            template_id=template.id,
+            title=sec_data.title,
+            description=sec_data.description,
+            section_order=sec_data.section_order,
+            weight=sec_data.weight,
+            section_type=sec_data.section_type,
+            is_required=sec_data.is_required,
+            instructions=sec_data.instructions,
+            visible_to_employee=sec_data.visible_to_employee,
+            visible_to_manager=sec_data.visible_to_manager
+        )
+        db.add(section)
+        db.flush()
+        
+        for q_data in sec_data.questions:
+            custom_rs_id = None
+            if q_data.custom_rating_scale_uuid:
+                custom_rs = db.query(RatingScale).filter(RatingScale.uuid == q_data.custom_rating_scale_uuid, RatingScale.organization_id == org_id).first()
+                if custom_rs:
+                    custom_rs_id = custom_rs.id
+                    
+            comp_id = None
+            if q_data.competency_uuid:
+                comp = db.query(CompetencyFramework).filter(CompetencyFramework.uuid == q_data.competency_uuid, CompetencyFramework.organization_id == org_id).first()
+                if comp:
+                    comp_id = comp.id
+                    
+            question = AppraisalQuestion(
+                section_id=section.id,
+                question_text=q_data.question_text,
+                question_type=q_data.question_type,
+                question_order=q_data.question_order,
+                is_required=q_data.is_required,
+                weight=q_data.weight,
+                use_section_rating_scale=q_data.use_section_rating_scale,
+                custom_rating_scale_id=custom_rs_id,
+                choices=q_data.choices or [],
+                allow_multiple_selection=q_data.allow_multiple_selection,
+                competency_id=comp_id,
+                auto_populate_goals=q_data.auto_populate_goals,
+                guidance=q_data.guidance,
+                placeholder_text=q_data.placeholder_text
+            )
+            db.add(question)
+
+    template.version += 1
+    db.commit()
+    return get_template(template.uuid, db, current_user)
 
 
 # ============================================================
@@ -1900,7 +2305,7 @@ def create_rating_scale(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, PerformancePermissions.MANAGE, "create rating scale")
+    _require_permission(db, current_user, "214", "create rating scale")
     org_id = _get_org_id(current_user)
     
     # Check for duplicate name
@@ -1948,7 +2353,7 @@ def update_rating_scale(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, PerformancePermissions.MANAGE, "update rating scale")
+    _require_permission(db, current_user, "215", "update rating scale")
     org_id = _get_org_id(current_user)
     
     scale = db.query(RatingScale).filter(
@@ -2013,7 +2418,7 @@ def set_default_rating_scale(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, PerformancePermissions.MANAGE, "update rating scale")
+    _require_permission(db, current_user, "215", "update rating scale")
     org_id = _get_org_id(current_user)
     
     scale = db.query(RatingScale).filter(
@@ -2047,7 +2452,7 @@ def delete_rating_scale(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, PerformancePermissions.MANAGE, "delete rating scale")
+    _require_permission(db, current_user, "216", "delete rating scale")
     org_id = _get_org_id(current_user)
     
     scale = db.query(RatingScale).filter(

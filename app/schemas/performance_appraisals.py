@@ -42,6 +42,22 @@ class AppraisalTemplateSummary(BaseModel):
         from_attributes = True
 
 
+class RoleSummary(BaseModel):
+    uuid: UUID4
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentSummary(BaseModel):
+    uuid: UUID4
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
 class RatingScaleSummary(BaseModel):
     uuid: UUID4
     name: str
@@ -818,8 +834,8 @@ class AppraisalTemplateSchema(BaseModel):
     description: Optional[str] = None
     is_active: bool
     is_default: bool
-    applicable_roles: List[Any]
-    applicable_departments: List[Any]
+    applicable_roles: List[RoleSummary]
+    applicable_departments: List[DepartmentSummary]
     applicable_grades: List[Any]
     goal_section_weight: Decimal
     competency_section_weight: Decimal
@@ -861,3 +877,95 @@ class AppraisalTemplateLookupResponse(BaseModel):
     message: str
     data: List[AppraisalTemplateLookupSchema]
 
+
+class AppraisalQuestionCreate(BaseModel):
+    question_text: str
+    question_type: QuestionType
+    question_order: int
+    is_required: bool = True
+    weight: Decimal = Decimal("100.00")
+    use_section_rating_scale: bool = True
+    custom_rating_scale_uuid: Optional[UUID4] = None
+    choices: Optional[List[Any]] = None
+    allow_multiple_selection: bool = False
+    competency_uuid: Optional[UUID4] = None
+    auto_populate_goals: bool = False
+    guidance: Optional[str] = None
+    placeholder_text: Optional[str] = None
+
+class AppraisalQuestionUpdate(AppraisalQuestionCreate):
+    pass
+
+class AppraisalQuestionSchema(AppraisalQuestionCreate):
+    uuid: UUID4
+    custom_rating_scale: Optional[RatingScaleSummary] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalSectionCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    section_order: int
+    weight: Decimal
+    section_type: str
+    is_required: bool = True
+    instructions: Optional[str] = None
+    visible_to_employee: bool = True
+    visible_to_manager: bool = True
+    questions: List[AppraisalQuestionCreate] = []
+
+class AppraisalSectionUpdate(AppraisalSectionCreate):
+    questions: List[AppraisalQuestionUpdate] = []
+
+class AppraisalSectionSchema(BaseModel):
+    uuid: UUID4
+    title: str
+    description: Optional[str] = None
+    section_order: int
+    weight: Decimal
+    section_type: str
+    is_required: bool
+    instructions: Optional[str] = None
+    visible_to_employee: bool
+    visible_to_manager: bool
+    questions: List[AppraisalQuestionSchema] = []
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    rating_scale_uuid: UUID4
+    is_active: bool = True
+    is_default: bool = False
+    applicable_roles: List[UUID4]
+    applicable_departments: List[UUID4]
+    applicable_grades: Optional[List[str]] = None
+    goal_section_weight: Decimal = Decimal("40.00")
+    competency_section_weight: Decimal = Decimal("30.00")
+    behavior_section_weight: Decimal = Decimal("20.00")
+    other_section_weight: Decimal = Decimal("10.00")
+    self_appraisal_enabled: bool = True
+    self_rating_visible_to_manager: bool = True
+    employee_comments_enabled: bool = True
+    manager_override_enabled: bool = True
+    final_rating_formula: str = "weighted_average"
+    sections: List[AppraisalSectionCreate] = []
+
+class AppraisalTemplateUpdate(AppraisalTemplateCreate):
+    sections: List[AppraisalSectionUpdate] = []
+
+class AppraisalTemplateDetailSchema(AppraisalTemplateSchema):
+    sections: List[AppraisalSectionSchema] = []
+
+    class Config:
+        from_attributes = True
+
+class AppraisalTemplateDetailResponse(BaseModel):
+    success: bool
+    message: str
+    data: AppraisalTemplateDetailSchema

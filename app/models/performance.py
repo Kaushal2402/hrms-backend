@@ -630,7 +630,7 @@ class AppraisalTemplate(Base):
     version = Column(SmallInteger, default=1)
     cloned_from_id = Column(Integer, ForeignKey("appraisal_templates.id"), nullable=True)
 
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
