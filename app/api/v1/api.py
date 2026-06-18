@@ -91,6 +91,7 @@ api_router.include_router(performance_appraisal_cycles.router, prefix="/performa
 api_router.include_router(performance_appraisal_cycles.router, prefix="/performance/appraisal-cycles", tags=["performance"])
 api_router.include_router(performance_appraisals.router, prefix="/performance/appraisals", tags=["performance"])
 api_router.include_router(performance_appraisals.templates_router, prefix="/performance/appraisal-templates", tags=["performance"])
+api_router.include_router(performance_appraisals.sections_router, prefix="/performance/appraisal-sections", tags=["performance"])
 api_router.include_router(performance_appraisals.scales_router, prefix="/performance/rating-scales", tags=["performance"])
 api_router.include_router(payroll_salary_components.router, prefix="/payroll/salary-components", tags=["payroll"])
 api_router.include_router(payroll_salary_templates.router, prefix="/payroll/salary-templates", tags=["payroll"])

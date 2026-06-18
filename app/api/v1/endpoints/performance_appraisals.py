@@ -96,7 +96,16 @@ from app.schemas.performance_appraisals import (
     AppraisalTemplateLookupResponse,
     AppraisalTemplateDetailResponse,
     AppraisalTemplateCreate,
-    AppraisalTemplateUpdate
+    AppraisalTemplateUpdate,
+    AppraisalTemplateClone,
+    AppraisalTemplatePreviewResponse,
+    TemplateReorderSectionsRequest,
+    TemplateUsageResponse,
+    AppraisalSectionCreate,
+    AppraisalSectionUpdate,
+    AppraisalSectionListResponse,
+    AppraisalSectionDetailResponse,
+    AppraisalSectionResponseItem
 )
 
 router = APIRouter()
@@ -1765,7 +1774,7 @@ def get_templates(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "list appraisal templates")
+    _require_permission(db, current_user, "217", "list appraisal templates")
     org_id = _get_org_id(current_user)
     
     query = db.query(AppraisalTemplate).filter(AppraisalTemplate.organization_id == org_id)
@@ -1878,7 +1887,7 @@ def get_template(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "view appraisal template")
+    _require_permission(db, current_user, "217", "view appraisal template")
     org_id = _get_org_id(current_user)
     
     template = db.query(AppraisalTemplate).filter(
@@ -1974,7 +1983,7 @@ def create_template(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, "214", "create appraisal template")
+    _require_permission(db, current_user, "218", "create appraisal template")
     org_id = _get_org_id(current_user)
     
     existing_template = db.query(AppraisalTemplate).filter(
@@ -2084,7 +2093,7 @@ def update_template(
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
 ):
-    _require_permission(db, current_user, "215", "update appraisal template")
+    _require_permission(db, current_user, "219", "update appraisal template")
     org_id = _get_org_id(current_user)
     
     template = db.query(AppraisalTemplate).filter(
@@ -2204,6 +2213,479 @@ def update_template(
     template.version += 1
     db.commit()
     return get_template(template.uuid, db, current_user)
+
+@templates_router.post("/{template_id}/clone", response_model=AppraisalTemplateDetailResponse)
+def clone_template(
+    template_id: uuid.UUID,
+    payload: AppraisalTemplateClone,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "217", "clone appraisal template")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    creator_id = None
+    if isinstance(current_user, Employee):
+        creator_id = current_user.id
+        
+    new_template = AppraisalTemplate(
+        organization_id=template.organization_id,
+        rating_scale_id=template.rating_scale_id,
+        name=payload.new_name,
+        description=template.description,
+        is_active=True,
+        is_default=False,
+        applicable_roles=template.applicable_roles,
+        applicable_departments=template.applicable_departments,
+        applicable_grades=template.applicable_grades,
+        goal_section_weight=template.goal_section_weight,
+        competency_section_weight=template.competency_section_weight,
+        behavior_section_weight=template.behavior_section_weight,
+        other_section_weight=template.other_section_weight,
+        self_appraisal_enabled=template.self_appraisal_enabled,
+        self_rating_visible_to_manager=template.self_rating_visible_to_manager,
+        employee_comments_enabled=template.employee_comments_enabled,
+        manager_override_enabled=template.manager_override_enabled,
+        final_rating_formula=template.final_rating_formula,
+        version=1,
+        cloned_from_id=template.id,
+        created_by=creator_id
+    )
+    db.add(new_template)
+    db.commit()
+    db.refresh(new_template)
+    
+    sections = db.query(AppraisalSection).filter(AppraisalSection.template_id == template.id).all()
+    for sec in sections:
+        new_sec = AppraisalSection(
+            template_id=new_template.id,
+            title=sec.title,
+            description=sec.description,
+            section_type=sec.section_type,
+            weight=sec.weight,
+            section_order=sec.section_order,
+            is_required=sec.is_required,
+            instructions=sec.instructions,
+            visible_to_employee=sec.visible_to_employee,
+            visible_to_manager=sec.visible_to_manager
+        )
+        db.add(new_sec)
+        db.commit()
+        db.refresh(new_sec)
+        
+        questions = db.query(AppraisalQuestion).filter(AppraisalQuestion.section_id == sec.id).all()
+        for q in questions:
+            new_q = AppraisalQuestion(
+                section_id=new_sec.id,
+                question_text=q.question_text,
+                question_type=q.question_type,
+                question_order=q.question_order,
+                is_required=q.is_required,
+                weight=q.weight,
+                use_section_rating_scale=q.use_section_rating_scale,
+                custom_rating_scale_id=q.custom_rating_scale_id,
+                choices=q.choices,
+                allow_multiple_selection=q.allow_multiple_selection,
+                competency_id=q.competency_id,
+                auto_populate_goals=q.auto_populate_goals,
+                guidance=q.guidance,
+                placeholder_text=q.placeholder_text
+            )
+            db.add(new_q)
+    
+    db.commit()
+    return get_template(new_template.uuid, db, current_user)
+
+
+@templates_router.patch("/{template_id}/set-default", response_model=AppraisalTemplateDetailResponse)
+def set_default_template(
+    template_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "218", "set default appraisal template")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.organization_id == org_id,
+        AppraisalTemplate.is_default == True
+    ).update({"is_default": False})
+    
+    template.is_default = True
+    db.commit()
+    return get_template(template.uuid, db, current_user)
+
+
+@templates_router.delete("/{template_id}")
+def delete_template(
+    template_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "220", "delete appraisal template")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    template.is_active = False
+    template.is_default = False
+    db.commit()
+    
+    return {"success": True, "message": "Appraisal template successfully deleted."}
+
+
+@templates_router.get("/{template_id}/preview", response_model=AppraisalTemplatePreviewResponse)
+def preview_template(
+    template_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "217", "preview appraisal template")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    sections = db.query(AppraisalSection).filter(AppraisalSection.template_id == template.id).order_by(AppraisalSection.section_order.asc()).all()
+    preview_sections = []
+    
+    for sec in sections:
+        questions = db.query(AppraisalQuestion).filter(AppraisalQuestion.section_id == sec.id).order_by(AppraisalQuestion.question_order.asc()).all()
+        q_list = []
+        for q in questions:
+            q_list.append({
+                "uuid": str(q.uuid),
+                "question_text": q.question_text,
+                "question_type": q.question_type.value if hasattr(q.question_type, 'value') else q.question_type,
+                "is_required": q.is_required,
+                "weight": float(q.weight) if q.weight else None,
+                "choices": q.choices,
+                "allow_multiple_selection": q.allow_multiple_selection,
+                "guidance": q.guidance,
+                "placeholder_text": q.placeholder_text
+            })
+            
+        preview_sections.append({
+            "uuid": str(sec.uuid),
+            "name": sec.title,
+            "description": sec.description,
+            "section_type": sec.section_type,
+            "weight": float(sec.weight) if sec.weight else None,
+            "questions": q_list
+        })
+        
+    return AppraisalTemplatePreviewResponse(
+        success=True,
+        message="Preview generated successfully",
+        data={
+            "template_name": template.name,
+            "description": template.description,
+            "sections": preview_sections
+        }
+    )
+
+
+@templates_router.post("/{template_id}/reorder-sections", response_model=dict)
+def reorder_sections(
+    template_id: uuid.UUID,
+    payload: TemplateReorderSectionsRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "217", "update appraisal template")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    # Pass 1: Shift all updating sections to a temporary safe range to avoid unique constraint collisions
+    # Pass 1: Shift all updating sections to a temporary safe range (within SmallInteger limit) to avoid unique constraint collisions
+    for item in payload.sections:
+        db.query(AppraisalSection).filter(
+            AppraisalSection.uuid == item.section_id,
+            AppraisalSection.template_id == template.id
+        ).update({"section_order": item.new_order + 10000}, synchronize_session=False)
+        
+    # Pass 2: Set them to their actual target orders
+    for item in payload.sections:
+        db.query(AppraisalSection).filter(
+            AppraisalSection.uuid == item.section_id,
+            AppraisalSection.template_id == template.id
+        ).update({"section_order": item.new_order}, synchronize_session=False)
+        
+    db.commit()
+    return {"success": True, "message": "Sections reordered successfully"}
+
+
+@templates_router.get("/{template_id}/usage", response_model=TemplateUsageResponse)
+def template_usage(
+    template_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "217", "view appraisal template usage")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    cycles = db.query(AppraisalCycle).filter(AppraisalCycle.template_id == template.id).all()
+    
+    cycle_list = []
+    for c in cycles:
+        cycle_list.append({
+            "uuid": str(c.uuid),
+            "name": c.name,
+            "status": c.status.value if hasattr(c.status, 'value') else c.status,
+            "start_date": c.start_date,
+            "end_date": c.end_date
+        })
+        
+    return TemplateUsageResponse(
+        success=True,
+        message="Usage retrieved successfully",
+        data={"cycles": cycle_list}
+    )
+
+@templates_router.get("/{template_id}/sections", response_model=AppraisalSectionListResponse)
+def get_template_sections(
+    template_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "217", "list appraisal template sections")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    sections = db.query(AppraisalSection).filter(
+        AppraisalSection.template_id == template.id
+    ).order_by(AppraisalSection.section_order.asc()).all()
+    
+    data = []
+    for s in sections:
+        q_count = db.query(AppraisalQuestion).filter(AppraisalQuestion.section_id == s.id).count()
+        item = AppraisalSectionResponseItem.model_validate(s)
+        item.question_count = q_count
+        data.append(item)
+        
+    return AppraisalSectionListResponse(
+        success=True,
+        message="Sections retrieved successfully",
+        data=data
+    )
+
+
+@templates_router.post("/{template_id}/sections", response_model=AppraisalSectionDetailResponse, status_code=201)
+def create_template_section(
+    template_id: uuid.UUID,
+    payload: AppraisalSectionCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "218", "create appraisal section")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Appraisal template not found")
+        
+    from sqlalchemy import func
+    
+    existing_order = db.query(AppraisalSection).filter(
+        AppraisalSection.template_id == template.id,
+        AppraisalSection.section_order == payload.section_order
+    ).first()
+    
+    if existing_order:
+        max_order = db.query(func.max(AppraisalSection.section_order)).filter(
+            AppraisalSection.template_id == template.id
+        ).scalar() or 0
+        payload.section_order = max_order + 1
+        
+    new_sec = AppraisalSection(
+        template_id=template.id,
+        **payload.model_dump()
+    )
+    db.add(new_sec)
+    db.commit()
+    db.refresh(new_sec)
+    
+    item = AppraisalSectionResponseItem.model_validate(new_sec)
+    return AppraisalSectionDetailResponse(
+        success=True,
+        message="Section created successfully",
+        data=item.model_dump()
+    )
+
+
+# ============================================================
+# APPRAISAL SECTIONS ROUTER
+# ============================================================
+sections_router = APIRouter()
+
+@sections_router.get("/{section_id}", response_model=AppraisalSectionDetailResponse)
+def get_section(
+    section_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "217", "view appraisal section")
+    org_id = _get_org_id(current_user)
+    
+    section = db.query(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalSection.uuid == section_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not section:
+        raise HTTPException(status_code=404, detail="Appraisal section not found")
+        
+    questions = db.query(AppraisalQuestion).filter(AppraisalQuestion.section_id == section.id).order_by(AppraisalQuestion.question_order.asc()).all()
+    q_list = []
+    for q in questions:
+        q_list.append({
+            "uuid": str(q.uuid),
+            "question_text": q.question_text,
+            "question_type": q.question_type.value if hasattr(q.question_type, 'value') else q.question_type,
+            "is_required": q.is_required,
+            "weight": float(q.weight) if q.weight else None,
+            "choices": q.choices,
+            "allow_multiple_selection": q.allow_multiple_selection,
+            "guidance": q.guidance,
+            "placeholder_text": q.placeholder_text
+        })
+        
+    sec_data = AppraisalSectionResponseItem.model_validate(section).model_dump()
+    sec_data['questions'] = q_list
+    
+    return AppraisalSectionDetailResponse(
+        success=True,
+        message="Section retrieved successfully",
+        data=sec_data
+    )
+
+@sections_router.put("/{section_id}", response_model=AppraisalSectionDetailResponse)
+def update_section(
+    section_id: uuid.UUID,
+    payload: AppraisalSectionUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "219", "update appraisal section")
+    org_id = _get_org_id(current_user)
+    
+    section = db.query(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalSection.uuid == section_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not section:
+        raise HTTPException(status_code=404, detail="Appraisal section not found")
+        
+    update_data = payload.model_dump(exclude_unset=True)
+    
+    if "section_order" in update_data and update_data["section_order"] != section.section_order:
+        existing_order = db.query(AppraisalSection).filter(
+            AppraisalSection.template_id == section.template_id,
+            AppraisalSection.section_order == update_data["section_order"],
+            AppraisalSection.id != section.id
+        ).first()
+        if existing_order:
+            raise HTTPException(status_code=400, detail="Another section already uses this Display Order.")
+            
+    for key, value in update_data.items():
+        setattr(section, key, value)
+        
+    db.commit()
+    db.refresh(section)
+    
+    item = AppraisalSectionResponseItem.model_validate(section)
+    return AppraisalSectionDetailResponse(
+        success=True,
+        message="Section updated successfully",
+        data=item.model_dump()
+    )
+
+@sections_router.delete("/{section_id}")
+def delete_section(
+    section_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "220", "delete appraisal section")
+    org_id = _get_org_id(current_user)
+    
+    section = db.query(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalSection.uuid == section_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not section:
+        raise HTTPException(status_code=404, detail="Appraisal section not found")
+        
+    # Check for active appraisals
+    active_cycles = db.query(AppraisalCycle).filter(
+        AppraisalCycle.template_id == section.template_id,
+        AppraisalCycle.status.in_([AppraisalCycleStatus.ACTIVE, AppraisalCycleStatus.IN_PROGRESS])
+    ).first()
+    
+    if active_cycles:
+        raise HTTPException(status_code=400, detail="Cannot delete section because the template is used in an active appraisal cycle.")
+        
+    db.query(AppraisalQuestion).filter(AppraisalQuestion.section_id == section.id).delete()
+    db.delete(section)
+    db.commit()
+    
+    return {"success": True, "message": "Section deleted successfully"}
+
 
 
 # ============================================================

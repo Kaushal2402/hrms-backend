@@ -2,7 +2,7 @@ from typing import List, Optional, Any, Dict
 from datetime import datetime, date
 from decimal import Decimal
 import uuid
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel, UUID4, constr, confloat
 
 from app.models.performance import (
     AppraisalStatus,
@@ -968,4 +968,93 @@ class AppraisalTemplateDetailSchema(AppraisalTemplateSchema):
 class AppraisalTemplateDetailResponse(BaseModel):
     success: bool
     message: str
-    data: AppraisalTemplateDetailSchema
+    data: Optional[AppraisalTemplateDetailSchema] = None
+
+
+class AppraisalTemplateClone(BaseModel):
+    new_name: str
+    version_notes: Optional[str] = None
+
+
+class AppraisalTemplatePreviewResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None  # Flexible dictionary for rendered preview
+
+
+class SectionReorderItem(BaseModel):
+    section_id: UUID4
+    new_order: int
+
+
+class TemplateReorderSectionsRequest(BaseModel):
+    sections: List[SectionReorderItem]
+
+
+class TemplateUsageCycle(BaseModel):
+    uuid: UUID4
+    name: str
+    status: str
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class TemplateUsageResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[Dict[str, List[TemplateUsageCycle]]] = None
+
+
+# ============================================================
+# APPRAISAL SECTION SCHEMAS
+# ============================================================
+
+class AppraisalSectionBase(BaseModel):
+    title: constr(min_length=1, max_length=150)
+    description: Optional[str] = None
+    section_order: int
+    weight: confloat(ge=0, le=100)
+    section_type: str
+    is_required: bool = True
+    instructions: Optional[str] = None
+    visible_to_employee: bool = True
+    visible_to_manager: bool = True
+
+
+class AppraisalSectionCreate(AppraisalSectionBase):
+    pass
+
+
+class AppraisalSectionUpdate(BaseModel):
+    title: Optional[constr(min_length=1, max_length=150)] = None
+    description: Optional[str] = None
+    section_order: Optional[int] = None
+    weight: Optional[confloat(ge=0, le=100)] = None
+    section_type: Optional[str] = None
+    is_required: Optional[bool] = None
+    instructions: Optional[str] = None
+    visible_to_employee: Optional[bool] = None
+    visible_to_manager: Optional[bool] = None
+
+
+class AppraisalSectionResponseItem(AppraisalSectionBase):
+    uuid: UUID4
+    template_id: int
+    question_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AppraisalSectionListResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[AppraisalSectionResponseItem]
+
+
+class AppraisalSectionDetailResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None  # To include nested questions
