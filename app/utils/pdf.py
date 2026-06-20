@@ -514,3 +514,250 @@ def get_final_settlement_html(data: Dict[str, Any]) -> str:
     </html>
     """
     return html
+
+
+def get_appraisal_record_html(data: Dict[str, Any]) -> str:
+    """Generates a professional HTML template for the Performance Appraisal Record"""
+    promotion_section = ""
+    if data.get('promotion_recommended'):
+        promotion_section = f"""
+        <div class="section-header">Promotion Recommendation</div>
+        <table class="info-table">
+            <tr>
+                <td class="label">Recommended</td>
+                <td class="value" style="color: #d97706; font-weight: bold;">YES</td>
+                <td class="label">Target Grade</td>
+                <td class="value">{data.get('promotion_recommended_to_grade', 'N/A')}</td>
+            </tr>
+            <tr>
+                <td class="label">Recommendation Notes</td>
+                <td class="value" colspan="3" style="font-weight: normal; color: #4b5563;">{data.get('promotion_notes', 'None')}</td>
+            </tr>
+        </table>
+        """
+
+    acknowledgment_section = ""
+    ack_status = "YES" if data.get('acknowledged_by_employee') else "NO"
+    ack_color = "#10b981" if data.get('acknowledged_by_employee') else "#ef4444"
+    disagreement_html = ""
+    if data.get('employee_disagreement_reason'):
+        disagreement_html = f"""
+        <tr>
+            <td class="label" style="color: #ef4444;">Disagreement Reason</td>
+            <td class="value" colspan="3" style="font-weight: normal; color: #991b1b; background-color: #fef2f2; padding: 8px; border-radius: 4px;">{data.get('employee_disagreement_reason')}</td>
+        </tr>
+        """
+    acknowledgment_section = f"""
+    <div class="section-header">Employee Acknowledgment</div>
+    <table class="info-table">
+        <tr>
+            <td class="label">Acknowledged</td>
+            <td class="value" style="color: {ack_color}; font-weight: bold;">{ack_status}</td>
+            <td class="label">Date Acknowledged</td>
+            <td class="value">{data.get('employee_acknowledged_at', 'N/A')}</td>
+        </tr>
+        {disagreement_html}
+    </table>
+    """
+
+    calibration_section = ""
+    if data.get('calibrated_score') is not None or data.get('final_rating_label'):
+        calibration_section = f"""
+        <tr>
+            <td class="label" style="color: #4f46e5;">Calibrated Score</td>
+            <td class="value" style="color: #4f46e5; font-size: 14px;">{data.get('calibrated_score', 'N/A')}</td>
+            <td class="label" style="color: #4f46e5;">Final Rating</td>
+            <td class="value" style="color: #4f46e5; font-size: 14px;">{data.get('final_rating_label', 'N/A')}</td>
+        </tr>
+        <tr>
+            <td class="label">Calibration Notes</td>
+            <td class="value" colspan="3" style="font-weight: normal; color: #4b5563;">{data.get('calibration_notes', 'None')}</td>
+        </tr>
+        """
+
+    html = f"""
+    <html>
+    <head>
+        <style>
+            @page {{
+                size: A4;
+                margin: 1.5cm;
+            }}
+            body {{
+                font-family: Helvetica, Arial, sans-serif;
+                color: #1f2937;
+                line-height: 1.5;
+                font-size: 11px;
+            }}
+            .header {{
+                text-align: center;
+                border-bottom: 3px solid #4f46e5;
+                padding-bottom: 15px;
+                margin-bottom: 25px;
+            }}
+            .company-name {{
+                font-size: 22px;
+                font-weight: bold;
+                color: #4f46e5;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }}
+            .payslip-title {{
+                font-size: 16px;
+                font-weight: bold;
+                margin-top: 5px;
+                color: #4b5563;
+            }}
+            .info-container {{
+                margin-bottom: 20px;
+            }}
+            .info-table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 15px;
+            }}
+            .info-table td {{
+                padding: 6px 4px;
+                vertical-align: top;
+                border-bottom: 1px solid #f3f4f6;
+            }}
+            .label {{
+                color: #6b7280;
+                width: 120px;
+                font-weight: bold;
+                text-transform: uppercase;
+                font-size: 9px;
+            }}
+            .value {{
+                font-weight: bold;
+                color: #111827;
+            }}
+            .section-header {{
+                font-size: 12px;
+                font-weight: bold;
+                color: #4f46e5;
+                margin-top: 25px;
+                margin-bottom: 10px;
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 5px;
+                text-transform: uppercase;
+            }}
+            .score-card-table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 10px;
+                border: 1px solid #e5e7eb;
+            }}
+            .score-card-table th {{
+                background-color: #f9fafb;
+                padding: 8px;
+                text-align: left;
+                font-size: 10px;
+                border-bottom: 2px solid #e5e7eb;
+                color: #374151;
+                text-transform: uppercase;
+            }}
+            .score-card-table td {{
+                padding: 10px 8px;
+                border-bottom: 1px solid #e5e7eb;
+            }}
+            .footer {{
+                position: fixed;
+                bottom: 0;
+                width: 100%;
+                font-size: 9px;
+                color: #9ca3af;
+                text-align: center;
+                border-top: 1px solid #f3f4f6;
+                padding-top: 15px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="company-name">{data.get('organization_name', 'HRMS Enterprise')}</div>
+            <div class="payslip-title">PERFORMANCE APPRAISAL REPORT</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">{data.get('cycle_name', 'N/A')}</div>
+        </div>
+
+        <div class="info-container">
+            <div class="section-header">Employee Information</div>
+            <table class="info-table">
+                <tr>
+                    <td class="label">Employee Name</td>
+                    <td class="value">{data.get('employee_name', 'N/A')}</td>
+                    <td class="label">Employee Code</td>
+                    <td class="value">{data.get('employee_code', 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td class="label">Department</td>
+                    <td class="value">{data.get('department_name', 'N/A')}</td>
+                    <td class="label">Designation</td>
+                    <td class="value">{data.get('designation', 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td class="label">Email Address</td>
+                    <td class="value">{data.get('employee_email', 'N/A')}</td>
+                    <td class="label">Appraisal Status</td>
+                    <td class="value" style="color: #4b5563;">{data.get('status', 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td class="label">Reporting Manager</td>
+                    <td class="value" colspan="3">{data.get('manager_name', 'N/A')}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section-header">Evaluation Summary</div>
+        <table class="score-card-table">
+            <thead>
+                <tr>
+                    <th>Evaluation Aspect</th>
+                    <th>Self Assessment</th>
+                    <th>Manager Review</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Goal Score</strong></td>
+                    <td>{data.get('self_goal_score', 'N/A')}</td>
+                    <td>{data.get('manager_goal_score', 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td><strong>Competency Score</strong></td>
+                    <td>{data.get('self_competency_score', 'N/A')}</td>
+                    <td>{data.get('manager_competency_score', 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td><strong>Overall Rating Score</strong></td>
+                    <td><strong>{data.get('self_overall_score', 'N/A')}</strong></td>
+                    <td><strong>{data.get('manager_overall_score', 'N/A')}</strong></td>
+                </tr>
+                <tr>
+                    <td><strong>Rating Description</strong></td>
+                    <td><span style="font-weight: bold;">{data.get('self_rating_label', 'N/A')}</span></td>
+                    <td><span style="font-weight: bold;">{data.get('manager_rating_label', 'N/A')}</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        {"" if not (data.get('calibrated_score') is not None or data.get('final_rating_label') or data.get('calibration_notes')) else f'''
+        <div class="section-header">Calibration Details</div>
+        <table class="info-table">
+            {calibration_section}
+        </table>
+        '''}
+
+        {promotion_section}
+
+        {acknowledgment_section}
+
+        <div class="footer">
+            This is a computer-generated performance appraisal report.<br/>
+            Confidential Document &copy; 2026 {data.get('organization_name', 'HRMS Enterprise')}
+        </div>
+    </body>
+    </html>
+    """
+    return html
+

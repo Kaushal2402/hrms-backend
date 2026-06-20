@@ -838,6 +838,10 @@ class SelfAppraisal(Base):
     appraisal_record = relationship("AppraisalRecord")
     employee = relationship("Employee")
 
+    @property
+    def appraisal_record_uuid(self):
+        return self.appraisal_record.uuid if self.appraisal_record else None
+
     __table_args__ = (
         Index("idx_self_appraisal_employee", "employee_id"),
     )
@@ -850,7 +854,7 @@ class ManagerAppraisal(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     uuid = Column(GUID(), default=uuid.uuid4, unique=True, nullable=False)
     appraisal_record_id = Column(Integer, ForeignKey("appraisal_records.id"), nullable=False, unique=True)
-    manager_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    manager_id = Column(Integer, ForeignKey("employees.id"), nullable=True, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
 
     # Narrative
@@ -874,6 +878,10 @@ class ManagerAppraisal(Base):
     appraisal_record = relationship("AppraisalRecord")
     manager = relationship("Employee", foreign_keys=[manager_id])
     employee = relationship("Employee", foreign_keys=[employee_id])
+
+    @property
+    def appraisal_record_uuid(self):
+        return self.appraisal_record.uuid if self.appraisal_record else None
 
     __table_args__ = (
         Index("idx_manager_appraisal_manager", "manager_id"),

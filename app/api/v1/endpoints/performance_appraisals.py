@@ -29,6 +29,7 @@ from app.models.performance import (
     AppraisalStatus,
     CycleStatus
 )
+from app.utils.pdf import generate_pdf, get_appraisal_record_html
 from app.schemas.performance_appraisals import (
     AppraisalRecordResponse,
     AppraisalRecordListResponse,
@@ -103,9 +104,18 @@ from app.schemas.performance_appraisals import (
     TemplateUsageResponse,
     AppraisalSectionCreate,
     AppraisalSectionUpdate,
+    QuestionReorderItem,
+    SectionBulkWeightRequest,
     AppraisalSectionListResponse,
     AppraisalSectionDetailResponse,
-    AppraisalSectionResponseItem
+    AppraisalSectionResponseItem,
+    AppraisalQuestionCreate,
+    AppraisalQuestionBulkCreate,
+    AppraisalQuestionDuplicateRequest,
+    AppraisalQuestionUpdate,
+    AppraisalQuestionSchema,
+    AppraisalQuestionListResponse,
+    AppraisalQuestionDetailResponse
 )
 
 router = APIRouter()
@@ -116,6 +126,13 @@ class PerformancePermissions:
     READ = "213"
     UPDATE = "214"
     APPROVE = "215"
+    EXPORT = "221"
+
+class AppraisalRecordPermissions:
+    READ = "221"
+    WRITE = "223"
+    GENERATE = "222"
+
 
 def _get_org_id(current_user: Union[Organization, Employee]) -> int:
     return current_user.id if isinstance(current_user, Organization) else current_user.organization_id
@@ -155,7 +172,7 @@ def list_appraisal_records(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "list appraisal records")
+    _require_permission(db, current_user, AppraisalRecordPermissions.READ, "list appraisal records")
     org_id = _get_org_id(current_user)
     query = db.query(AppraisalRecord).filter(AppraisalRecord.organization_id == org_id)
 
@@ -226,7 +243,11 @@ def get_my_appraisal(
 
     record = query.first()
     if not record:
-        raise HTTPException(status_code=404, detail="No appraisal record found for current cycle")
+        return AppraisalRecordResponse(
+            success=True,
+            message="No appraisal record found for current cycle",
+            data=None
+        )
     
     return AppraisalRecordResponse(
         success=True,
@@ -238,23 +259,47 @@ def get_my_appraisal(
 def get_team_appraisals(
     appraisal_cycle_uuid: Optional[uuid.UUID] = None,
     status: Optional[AppraisalStatus] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "view team appraisals")
+    if not isinstance(current_user, Organization):
+        if not (deps.has_permission(db, current_user, AppraisalRecordPermissions.READ) or deps.has_permission(db, current_user, PerformancePermissions.READ)):
+            raise HTTPException(status_code=403, detail="You do not have permission to view team appraisals")
     org_id = _get_org_id(current_user)
     
     query = db.query(AppraisalRecord).filter(AppraisalRecord.organization_id == org_id)
     if not isinstance(current_user, Organization):
-        query = query.filter(AppraisalRecord.manager_id == current_user.id)
+        if not deps.has_permission(db, current_user, AppraisalRecordPermissions.READ):
+            query = query.filter(AppraisalRecord.manager_id == current_user.id)
         
     if appraisal_cycle_uuid:
         query = query.join(AppraisalCycle).filter(AppraisalCycle.uuid == appraisal_cycle_uuid)
     if status:
         query = query.filter(AppraisalRecord.status == status)
+
+    if search:
+        query = query.join(Employee, AppraisalRecord.employee_id == Employee.id).filter(
+            or_(
+                Employee.first_name.ilike(f"%{search}%"),
+                Employee.last_name.ilike(f"%{search}%"),
+                Employee.email.ilike(f"%{search}%")
+            )
+        )
+
+    if sort_by:
+        for s in sort_by.split(","):
+            descending = s.startswith("-")
+            field = s.lstrip("-")
+            if hasattr(AppraisalRecord, field):
+                col = getattr(AppraisalRecord, field)
+                query = query.order_by(col.desc() if descending else col.asc())
+    else:
+        query = query.order_by(AppraisalRecord.created_at.desc())
 
     total_records = query.count()
     items = query.offset((page - 1) * limit).limit(limit).all()
@@ -278,9 +323,13 @@ def get_appraisal_record(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "view appraisal record")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
+    
+    if not isinstance(current_user, Organization):
+        if record.employee_id != current_user.id and record.manager_id != current_user.id:
+            if not deps.has_permission(db, current_user, AppraisalRecordPermissions.READ):
+                raise HTTPException(status_code=403, detail="You do not have permission to view this appraisal record")
     return AppraisalRecordResponse(
         success=True,
         message="Appraisal record retrieved successfully",
@@ -294,7 +343,7 @@ def publish_appraisal_record(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.UPDATE, "publish appraisal record")
+    _require_permission(db, current_user, AppraisalRecordPermissions.WRITE, "publish appraisal record")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
@@ -318,13 +367,11 @@ def acknowledge_appraisal_record(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    if isinstance(current_user, Organization):
-        raise HTTPException(status_code=400, detail="Organizations cannot acknowledge appraisals")
-        
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
-    if record.employee_id != current_user.id:
+    # Employees can only acknowledge their own appraisal; org/admin can acknowledge any
+    if not isinstance(current_user, Organization) and record.employee_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only acknowledge your own appraisal")
         
     record.acknowledged_by_employee = payload.acknowledged if payload.acknowledged is not None else True
@@ -349,7 +396,7 @@ def calibrate_appraisal_record(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.APPROVE, "calibrate appraisal record")
+    _require_permission(db, current_user, AppraisalRecordPermissions.WRITE, "calibrate appraisal record")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
@@ -381,7 +428,7 @@ def recommend_promotion(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.UPDATE, "recommend promotion")
+    _require_permission(db, current_user, AppraisalRecordPermissions.WRITE, "recommend promotion")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
@@ -394,6 +441,7 @@ def recommend_promotion(
         
     db.commit()
     db.refresh(record)
+    
     return AppraisalRecordResponse(
         success=True,
         message="Promotion recommendation updated successfully",
@@ -407,7 +455,7 @@ def get_appraisal_history(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "view history")
+    _require_permission(db, current_user, AppraisalRecordPermissions.READ, "view history")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
@@ -469,7 +517,7 @@ def bulk_publish_records(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.UPDATE, "bulk publish appraisal records")
+    _require_permission(db, current_user, AppraisalRecordPermissions.WRITE, "bulk publish appraisal records")
     org_id = _get_org_id(current_user)
     
     query = db.query(AppraisalRecord).filter(
@@ -508,13 +556,55 @@ def export_appraisal_record(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "export appraisal record")
+    _require_permission(db, current_user, AppraisalRecordPermissions.READ, "export appraisal record")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
-    # Return a basic dummy pdf file
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    org_name = org.name if org else "HRMS Enterprise"
+    
+    data = {
+        "organization_name": org_name,
+        "cycle_name": record.appraisal_cycle.name if record.appraisal_cycle else "N/A",
+        "employee_name": f"{record.employee.first_name} {record.employee.last_name}" if record.employee else "N/A",
+        "employee_code": record.employee.employee_code if record.employee else "N/A",
+        "employee_email": record.employee.email if record.employee else "N/A",
+        "department_name": record.employee.department.department_name if record.employee and record.employee.department else "N/A",
+        "designation": record.employee.job_title_name if record.employee and record.employee.job_title_name else "N/A",
+        "manager_name": f"{record.manager.first_name} {record.manager.last_name}" if record.manager else "N/A",
+        "status": record.status.value.replace("_", " ").title() if record.status else "N/A",
+        
+        "self_goal_score": float(record.self_goal_score) if record.self_goal_score is not None else "N/A",
+        "self_competency_score": float(record.self_competency_score) if record.self_competency_score is not None else "N/A",
+        "self_overall_score": float(record.self_overall_score) if record.self_overall_score is not None else "N/A",
+        "self_rating_label": record.self_rating_label or "N/A",
+        
+        "manager_goal_score": float(record.manager_goal_score) if record.manager_goal_score is not None else "N/A",
+        "manager_competency_score": float(record.manager_competency_score) if record.manager_competency_score is not None else "N/A",
+        "manager_overall_score": float(record.manager_overall_score) if record.manager_overall_score is not None else "N/A",
+        "manager_rating_label": record.manager_rating_label or "N/A",
+        
+        "calibrated_score": float(record.calibrated_score) if record.calibrated_score is not None else (float(record.final_score) if record.final_score is not None else None),
+        "final_rating_label": record.final_rating_label or "N/A",
+        "calibration_notes": record.calibration_notes or "",
+        
+        "promotion_recommended": record.promotion_recommended,
+        "promotion_recommended_to_grade": record.promotion_recommended_to_grade or "N/A",
+        "promotion_notes": record.notes or "",
+        
+        "acknowledged_by_employee": record.acknowledged_by_employee,
+        "employee_acknowledged_at": record.employee_acknowledged_at.strftime("%Y-%m-%d %H:%M:%S") if record.employee_acknowledged_at else "N/A",
+        "employee_disagreement_reason": record.employee_disagreement_reason or "",
+    }
+    
+    html = get_appraisal_record_html(data)
+    pdf_content = generate_pdf(html)
+    
+    if not pdf_content:
+        raise HTTPException(status_code=500, detail="Failed to generate PDF report")
+        
     return Response(
-        content=b"%PDF-1.4 dummy contents for appraisal record",
+        content=pdf_content.getvalue(),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=appraisal_record_{record.uuid}.pdf"}
     )
@@ -526,7 +616,7 @@ def generate_cycle_records(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.UPDATE, "generate cycle records")
+    _require_permission(db, current_user, AppraisalRecordPermissions.GENERATE, "generate cycle records")
     org_id = _get_org_id(current_user)
     
     cycle = db.query(AppraisalCycle).filter(AppraisalCycle.uuid == cycle_uuid, AppraisalCycle.organization_id == org_id).first()
@@ -558,7 +648,7 @@ def generate_cycle_records(
                 organization_id=org_id,
                 appraisal_cycle_id=cycle.id,
                 employee_id=emp.id,
-                manager_id=emp.manager_id,
+                manager_id=emp.reporting_manager_id,
                 template_id=template.id,
                 rating_scale_id=rating_scale.id,
                 status=AppraisalStatus.NOT_STARTED
@@ -585,9 +675,12 @@ def get_self_appraisal(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "view self appraisal")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
+    
+    if not isinstance(current_user, Organization) and record.employee_id != current_user.id:
+        if not deps.has_permission(db, current_user, "221"):
+            raise HTTPException(status_code=403, detail="You do not have permission to view other self appraisals")
     
     sa = db.query(SelfAppraisal).filter(SelfAppraisal.appraisal_record_id == record.id).first()
     if not sa:
@@ -724,7 +817,7 @@ def reopen_self_appraisal(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.UPDATE, "reopen self appraisal")
+    _require_permission(db, current_user, "223", "reopen self appraisal")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
@@ -735,7 +828,10 @@ def reopen_self_appraisal(
     sa.is_submitted = False
     sa.submitted_at = None
     record.status = AppraisalStatus.SELF_IN_PROGRESS
-    
+    record.self_appraisal_submitted_at = None
+    if payload.reason:
+        record.notes = payload.reason
+        
     db.commit()
     db.refresh(sa)
     return SelfAppraisalResponse(
@@ -754,26 +850,52 @@ def get_self_appraisal_completion(
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
-    # Calculate answering counts
-    total_q = db.query(AppraisalQuestion).join(AppraisalQuestion.section).filter(
+    # Permission check: 221 (If no permission then access own data only)
+    if not isinstance(current_user, Organization) and record.employee_id != current_user.id:
+        if not deps.has_permission(db, current_user, "221"):
+            raise HTTPException(status_code=403, detail="You do not have permission to view other self appraisals")
+            
+    # Find all required questions for the record's template
+    all_required_qs = db.query(AppraisalQuestion).join(AppraisalQuestion.section).filter(
         AppraisalQuestion.is_required == True,
         AppraisalQuestion.section.has(template_id=record.template_id)
-    ).count()
+    ).all()
     
-    answered_q = db.query(AppraisalAnswer).filter(
+    # Find all answered questions for this record
+    answered_answers = db.query(AppraisalAnswer).filter(
         AppraisalAnswer.appraisal_record_id == record.id,
-        AppraisalAnswer.respondent_type == "self",
-        AppraisalAnswer.rating_value.isnot(None)
-    ).count()
+        AppraisalAnswer.respondent_type == "self"
+    ).filter(
+        (AppraisalAnswer.rating_value.isnot(None)) | 
+        ((AppraisalAnswer.text_answer.isnot(None)) & (AppraisalAnswer.text_answer != ""))
+    ).all()
     
+    answered_ids = {ans.question_id for ans in answered_answers}
+    
+    # Construct pending questions details
+    pending_questions = [
+        {
+            "id": q.id,
+            "uuid": str(q.uuid),
+            "question_text": q.question_text,
+            "question_type": q.question_type.value if hasattr(q.question_type, 'value') else str(q.question_type),
+            "section_id": q.section_id
+        }
+        for q in all_required_qs if q.id not in answered_ids
+    ]
+    
+    total_q = len(all_required_qs)
+    answered_q = total_q - len(pending_questions)
     pct = (answered_q / total_q * 100) if total_q > 0 else 100.0
+    
     return SelfAppraisalCompletionResponse(
         success=True,
         message="Completion percentage retrieved successfully",
         data={
             "completion_percentage": round(pct, 2),
             "answered_count": answered_q,
-            "total_required": total_q
+            "total_required": total_q,
+            "pending_questions": pending_questions
         }
     )
 
@@ -787,6 +909,11 @@ def get_self_appraisal_goals(
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
+    # 221 permission check (own data only if no permission, all if has permission)
+    if not isinstance(current_user, Organization) and record.employee_id != current_user.id:
+        if not deps.has_permission(db, current_user, "221"):
+            raise HTTPException(status_code=403, detail="You do not have permission to view other self appraisals")
+            
     goals = db.query(EmployeeGoal).filter(
         EmployeeGoal.organization_id == org_id,
         EmployeeGoal.employee_id == record.employee_id,
@@ -801,14 +928,15 @@ def get_self_appraisal_goals(
 
 @router.get("/self-appraisals/pending", response_model=PendingSelfAppraisalsListResponse)
 def get_pending_self_appraisals(
-    appraisal_cycle_uuid: Optional[uuid.UUID] = None,
-    department_uuid: Optional[uuid.UUID] = None,
-    manager_uuid: Optional[uuid.UUID] = None,
+    appraisal_cycle_id: Optional[str] = None,
+    department_id: Optional[str] = None,
+    manager_id: Optional[str] = None,
+    days_to_deadline: Optional[int] = None,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "list pending self appraisals")
+    _require_permission(db, current_user, "221", "list pending self appraisals")
     org_id = _get_org_id(current_user)
     
     query = db.query(AppraisalRecord).filter(
@@ -816,14 +944,37 @@ def get_pending_self_appraisals(
         AppraisalRecord.status.in_([AppraisalStatus.NOT_STARTED, AppraisalStatus.SELF_IN_PROGRESS])
     )
     
-    if appraisal_cycle_uuid:
-        query = query.join(AppraisalCycle).filter(AppraisalCycle.uuid == appraisal_cycle_uuid)
-    if department_uuid:
-        query = query.join(Employee, AppraisalRecord.employee_id == Employee.id).filter(
-            Employee.department_id == db.query(Department.id).filter(Department.uuid == department_uuid).scalar_subquery()
-        )
-    if manager_uuid:
-        query = query.filter(AppraisalRecord.manager_id == db.query(Employee.id).filter(Employee.uuid == manager_uuid).scalar_subquery())
+    if appraisal_cycle_id:
+        try:
+            val_uuid = uuid.UUID(appraisal_cycle_id)
+            query = query.join(AppraisalCycle).filter(AppraisalCycle.uuid == val_uuid)
+        except ValueError:
+            query = query.filter(AppraisalRecord.appraisal_cycle_id == int(appraisal_cycle_id))
+            
+    if department_id:
+        try:
+            val_uuid = uuid.UUID(department_id)
+            query = query.join(Employee, AppraisalRecord.employee_id == Employee.id).filter(
+                Employee.department_id == db.query(Department.id).filter(Department.uuid == val_uuid).scalar_subquery()
+            )
+        except ValueError:
+            query = query.join(Employee, AppraisalRecord.employee_id == Employee.id).filter(
+                Employee.department_id == int(department_id)
+            )
+            
+    if manager_id:
+        try:
+            val_uuid = uuid.UUID(manager_id)
+            query = query.filter(AppraisalRecord.manager_id == db.query(Employee.id).filter(Employee.uuid == val_uuid).scalar_subquery())
+        except ValueError:
+            query = query.filter(AppraisalRecord.manager_id == int(manager_id))
+            
+    if days_to_deadline is not None:
+        from datetime import timedelta
+        target_date = date.today() + timedelta(days=days_to_deadline)
+        if not appraisal_cycle_id:
+            query = query.join(AppraisalCycle)
+        query = query.filter(AppraisalCycle.self_appraisal_end <= target_date)
         
     records = query.all()
     data = []
@@ -854,16 +1005,21 @@ def get_manager_appraisal(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "view manager appraisal")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
+    if not isinstance(current_user, Organization) and record.manager_id != current_user.id:
+        if not deps.has_permission(db, current_user, "225"):
+            raise HTTPException(status_code=403, detail="You do not have permission to view other manager appraisals")
+    
     ma = db.query(ManagerAppraisal).filter(ManagerAppraisal.appraisal_record_id == record.id).first()
     if not ma:
-        # Create draft
+        # Create draft — manager_id may be None if no manager is assigned yet
+        if not record.employee_id:
+            raise HTTPException(status_code=400, detail="Appraisal record has no employee assigned")
         ma = ManagerAppraisal(
             appraisal_record_id=record.id,
-            manager_id=record.manager_id or 0,
+            manager_id=record.manager_id,  # May be None — column is now nullable
             employee_id=record.employee_id,
             is_submitted=False
         )
@@ -889,7 +1045,8 @@ def update_manager_appraisal(
     record = _get_appraisal_record(db, record_uuid, org_id)
     
     if not isinstance(current_user, Organization) and record.manager_id != current_user.id:
-        raise HTTPException(status_code=403, detail="You can only evaluate your direct reports")
+        if not deps.has_permission(db, current_user, "227"):
+            raise HTTPException(status_code=403, detail="You can only evaluate your direct reports or manage evaluations with permission 227")
         
     ma = db.query(ManagerAppraisal).filter(ManagerAppraisal.appraisal_record_id == record.id).first()
     if not ma:
@@ -964,7 +1121,8 @@ def submit_manager_appraisal(
     record = _get_appraisal_record(db, record_uuid, org_id)
     
     if not isinstance(current_user, Organization) and record.manager_id != current_user.id:
-        raise HTTPException(status_code=403, detail="You can only evaluate your direct reports")
+        if not deps.has_permission(db, current_user, "226"):
+            raise HTTPException(status_code=403, detail="You can only submit evaluations for your direct reports or with permission 226")
         
     ma = db.query(ManagerAppraisal).filter(ManagerAppraisal.appraisal_record_id == record.id).first()
     if not ma:
@@ -991,7 +1149,7 @@ def reopen_manager_appraisal(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.UPDATE, "reopen manager appraisal")
+    _require_permission(db, current_user, "226", "reopen manager appraisal")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
     
@@ -1013,12 +1171,14 @@ def reopen_manager_appraisal(
 
 @router.get("/manager-appraisals/pending", response_model=PendingManagerAppraisalsListResponse)
 def get_pending_manager_appraisals(
+    appraisal_cycle_id: Optional[str] = None,
     appraisal_cycle_uuid: Optional[uuid.UUID] = None,
+    days_to_deadline: Optional[int] = None,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "list pending manager appraisals")
+    _require_permission(db, current_user, "225", "list pending manager appraisals")
     org_id = _get_org_id(current_user)
     
     query = db.query(AppraisalRecord).filter(
@@ -1028,13 +1188,26 @@ def get_pending_manager_appraisals(
     if not isinstance(current_user, Organization):
         query = query.filter(AppraisalRecord.manager_id == current_user.id)
         
-    if appraisal_cycle_uuid:
-        query = query.join(AppraisalCycle).filter(AppraisalCycle.uuid == appraisal_cycle_uuid)
+    cycle_val = appraisal_cycle_uuid or appraisal_cycle_id
+    if cycle_val:
+        try:
+            val_uuid = uuid.UUID(str(cycle_val))
+            query = query.join(AppraisalCycle).filter(AppraisalCycle.uuid == val_uuid)
+        except ValueError:
+            query = query.filter(AppraisalRecord.appraisal_cycle_id == int(cycle_val))
+            
+    if days_to_deadline is not None:
+        from datetime import timedelta
+        target_date = date.today() + timedelta(days=days_to_deadline)
+        if not cycle_val:
+            query = query.join(AppraisalCycle)
+        query = query.filter(AppraisalCycle.manager_review_end <= target_date)
         
     records = query.all()
     data = []
     for r in records:
         data.append(PendingManagerAppraisalItem(
+            record_uuid=r.uuid,
             employee=r.employee,
             appraisal_cycle=r.appraisal_cycle,
             deadline=r.appraisal_cycle.manager_review_end if r.appraisal_cycle else None,
@@ -1048,15 +1221,19 @@ def get_pending_manager_appraisals(
     )
 
 @router.get("/appraisal-records/{record_uuid}/compare-scores", response_model=ScoreComparisonResponse)
+@router.get("/appraisal-records/{record_uuid}/score-comparison", response_model=ScoreComparisonResponse)
 def compare_appraisal_scores(
     record_uuid: uuid.UUID,
     db: Session = Depends(deps.get_db),
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.READ, "compare appraisal scores")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
+    
+    if not isinstance(current_user, Organization) and current_user.id not in [record.employee_id, record.manager_id]:
+        if not deps.has_permission(db, current_user, "225"):
+            raise HTTPException(status_code=403, detail="You do not have permission to view this score comparison")
     
     # Comparison of scores per section
     sections = [
@@ -1080,6 +1257,7 @@ def compare_appraisal_scores(
     )
 
 @router.post("/appraisal-records/{record_uuid}/override-score", response_model=AppraisalRecordResponse)
+@router.patch("/appraisal-records/{record_uuid}/manager-appraisal/override-score", response_model=AppraisalRecordResponse)
 def manager_override_score(
     record_uuid: uuid.UUID,
     payload: ManagerOverrideScoreRequest,
@@ -1087,9 +1265,12 @@ def manager_override_score(
     current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
     current_org: Organization = Depends(deps.get_current_org)
 ):
-    _require_permission(db, current_user, PerformancePermissions.APPROVE, "override appraisal score")
     org_id = _get_org_id(current_user)
     record = _get_appraisal_record(db, record_uuid, org_id)
+    
+    if not isinstance(current_user, Organization) and record.manager_id != current_user.id:
+        if not deps.has_permission(db, current_user, "227"):
+            raise HTTPException(status_code=403, detail="You do not have permission to override this appraisal score")
     
     record.manager_overall_score = payload.manager_overall_score
     record.manager_rating_label = payload.manager_rating_label
@@ -1104,6 +1285,61 @@ def manager_override_score(
         message="Overall appraisal score overridden successfully",
         data=record
     )
+
+@router.patch("/appraisal-records/{record_uuid}/publish", response_model=AppraisalRecordResponse)
+def publish_appraisal_record(
+    record_uuid: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
+    current_org: Organization = Depends(deps.get_current_org)
+):
+    _require_permission(db, current_user, AppraisalRecordPermissions.WRITE, "publish appraisal record")
+    org_id = _get_org_id(current_user)
+    record = _get_appraisal_record(db, record_uuid, org_id)
+    
+    record.status = AppraisalStatus.PUBLISHED
+    record.published_at = datetime.utcnow()
+    record.published_by = current_user.id if not isinstance(current_user, Organization) else None
+    
+    db.commit()
+    db.refresh(record)
+    return AppraisalRecordResponse(
+        success=True,
+        message="Appraisal record published successfully",
+        data=record
+    )
+
+@router.patch("/appraisal-records/{record_uuid}/acknowledge", response_model=AppraisalRecordResponse)
+def acknowledge_appraisal_record(
+    record_uuid: uuid.UUID,
+    payload: AppraisalRecordAcknowledge,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user),
+    current_org: Organization = Depends(deps.get_current_org)
+):
+    _require_permission(db, current_user, AppraisalRecordPermissions.WRITE, "acknowledge appraisal record")
+    org_id = _get_org_id(current_user)
+    record = _get_appraisal_record(db, record_uuid, org_id)
+    
+    if isinstance(current_user, Employee) and record.employee_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only acknowledge your own appraisal record")
+        
+    if record.status != AppraisalStatus.PUBLISHED:
+        raise HTTPException(status_code=400, detail="Only published appraisal records can be acknowledged")
+    
+    record.status = AppraisalStatus.ACKNOWLEDGED
+    record.acknowledged_by_employee = payload.acknowledged
+    record.employee_disagreement_reason = payload.employee_disagreement_reason
+    record.employee_acknowledged_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(record)
+    return AppraisalRecordResponse(
+        success=True,
+        message="Appraisal record acknowledged successfully",
+        data=record
+    )
+
 
 
 # ============================================================
@@ -2571,6 +2807,92 @@ def create_template_section(
 # ============================================================
 sections_router = APIRouter()
 
+@sections_router.patch("/bulk-weight", response_model=AppraisalSectionListResponse)
+def bulk_update_section_weights(
+    payload: SectionBulkWeightRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "219", "update section weights")
+    org_id = _get_org_id(current_user)
+    
+    template = db.query(AppraisalTemplate).filter(
+        AppraisalTemplate.uuid == payload.template_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+        
+    total_weight = sum(item.weight for item in payload.sections)
+    if total_weight != Decimal("100.00"):
+        raise HTTPException(status_code=422, detail="Section weights must sum to exactly 100%")
+        
+    updated_sections = []
+    
+    for item in payload.sections:
+        section = db.query(AppraisalSection).filter(
+            AppraisalSection.uuid == item.section_id,
+            AppraisalSection.template_id == template.id
+        ).first()
+        
+        if section:
+            section.weight = item.weight
+            updated_sections.append(section)
+            
+    db.commit()
+    for s in updated_sections:
+        db.refresh(s)
+        
+    return {"success": True, "message": "Section weights updated successfully", "data": updated_sections}
+
+@sections_router.post("/{section_id}/reorder-questions")
+def reorder_section_questions(
+    section_id: uuid.UUID,
+    payload: List[QuestionReorderItem],
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "219", "reorder section questions")
+    org_id = _get_org_id(current_user)
+    
+    section = db.query(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalSection.uuid == section_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+        
+    orders = [item.new_order for item in payload]
+    if len(orders) != len(set(orders)):
+        raise HTTPException(status_code=422, detail="Duplicate orders are not allowed")
+
+    # Shift all orders by 10000 temporarily to avoid unique constraint collisions
+    for item in payload:
+        question = db.query(AppraisalQuestion).filter(
+            AppraisalQuestion.uuid == item.question_id,
+            AppraisalQuestion.section_id == section.id
+        ).first()
+        
+        if question:
+            question.question_order = item.new_order + 10000
+            
+    db.flush()
+    
+    for item in payload:
+        question = db.query(AppraisalQuestion).filter(
+            AppraisalQuestion.uuid == item.question_id,
+            AppraisalQuestion.section_id == section.id
+        ).first()
+        
+        if question:
+            question.question_order = question.question_order - 10000
+            
+    db.commit()
+    
+    return {"success": True, "message": "Questions reordered successfully"}
+
 @sections_router.get("/{section_id}", response_model=AppraisalSectionDetailResponse)
 def get_section(
     section_id: uuid.UUID,
@@ -2686,6 +3008,335 @@ def delete_section(
     
     return {"success": True, "message": "Section deleted successfully"}
 
+
+
+@sections_router.get("/{section_id}/questions", response_model=AppraisalQuestionListResponse)
+def get_section_questions(
+    section_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "217", "view appraisal questions")
+    org_id = _get_org_id(current_user)
+    
+    section = db.query(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalSection.uuid == section_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not section:
+        raise HTTPException(status_code=404, detail="Appraisal section not found")
+        
+    questions = db.query(AppraisalQuestion).filter(
+        AppraisalQuestion.section_id == section.id
+    ).order_by(AppraisalQuestion.question_order.asc()).all()
+    
+    return {"success": True, "data": questions}
+
+
+@sections_router.post("/{section_id}/questions", response_model=AppraisalQuestionDetailResponse, status_code=201)
+def create_section_question(
+    section_id: uuid.UUID,
+    payload: AppraisalQuestionCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "218", "create appraisal question")
+    org_id = _get_org_id(current_user)
+    
+    section = db.query(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalSection.uuid == section_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not section:
+        raise HTTPException(status_code=404, detail="Appraisal section not found")
+        
+    from sqlalchemy import func
+    existing_order = db.query(AppraisalQuestion).filter(
+        AppraisalQuestion.section_id == section.id,
+        AppraisalQuestion.question_order == payload.question_order
+    ).first()
+    
+    if existing_order:
+        max_order = db.query(func.max(AppraisalQuestion.question_order)).filter(
+            AppraisalQuestion.section_id == section.id
+        ).scalar() or 0
+        payload.question_order = max_order + 1
+        
+    custom_scale_id = None
+    if payload.custom_rating_scale_uuid:
+        scale = db.query(RatingScale).filter(
+            RatingScale.uuid == payload.custom_rating_scale_uuid,
+            RatingScale.organization_id == org_id
+        ).first()
+        if scale:
+            custom_scale_id = scale.id
+            
+    comp_id = None
+    if payload.competency_uuid:
+        from app.models.performance import CompetencyFramework
+        comp = db.query(CompetencyFramework).filter(
+            CompetencyFramework.uuid == payload.competency_uuid,
+            CompetencyFramework.organization_id == org_id
+        ).first()
+        if comp:
+            comp_id = comp.id
+            
+    data_dict = payload.model_dump(exclude={"custom_rating_scale_uuid", "competency_uuid"})
+    data_dict["custom_rating_scale_id"] = custom_scale_id
+    data_dict["competency_id"] = comp_id
+    
+    new_q = AppraisalQuestion(
+        section_id=section.id,
+        **data_dict
+    )
+    db.add(new_q)
+    db.commit()
+    db.refresh(new_q)
+    
+    return {"success": True, "message": "Question created successfully", "data": new_q}
+
+
+# ============================================================
+# APPRAISAL QUESTIONS ROUTER
+# ============================================================
+
+questions_router = APIRouter()
+
+@questions_router.post("/bulk-create", response_model=AppraisalQuestionListResponse)
+def bulk_create_questions(
+    payload: AppraisalQuestionBulkCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "218", "bulk create appraisal questions")
+    org_id = _get_org_id(current_user)
+    
+    section = db.query(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalSection.uuid == payload.section_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+        
+    created_questions = []
+    
+    max_order = db.query(func.max(AppraisalQuestion.question_order)).filter(
+        AppraisalQuestion.section_id == section.id
+    ).scalar()
+    current_order = (max_order or 0)
+    
+    for q_data in payload.questions:
+        create_data = q_data.model_dump()
+        scale_uuid = create_data.pop("custom_rating_scale_uuid", None)
+        scale_id = None
+        if scale_uuid:
+            scale = db.query(RatingScale).filter(
+                RatingScale.uuid == scale_uuid,
+                RatingScale.organization_id == org_id
+            ).first()
+            if scale:
+                scale_id = scale.id
+                
+        existing_order = db.query(AppraisalQuestion).filter(
+            AppraisalQuestion.section_id == section.id,
+            AppraisalQuestion.question_order == create_data["question_order"]
+        ).first()
+        
+        if existing_order or create_data["question_order"] <= 0:
+            current_order += 1
+            create_data["question_order"] = current_order
+        else:
+            current_order = max(current_order, create_data["question_order"])
+            
+        comp_uuid = create_data.pop("competency_uuid", None)
+        comp_id = None
+        if comp_uuid:
+            from app.models.performance import CompetencyFramework
+            comp = db.query(CompetencyFramework).filter(
+                CompetencyFramework.uuid == comp_uuid,
+                CompetencyFramework.organization_id == org_id
+            ).first()
+            if comp:
+                comp_id = comp.id
+                
+        question = AppraisalQuestion(
+            section_id=section.id,
+            custom_rating_scale_id=scale_id,
+            competency_id=comp_id,
+            **create_data
+        )
+        db.add(question)
+        created_questions.append(question)
+        
+    db.commit()
+    for q in created_questions:
+        db.refresh(q)
+        
+    return {"success": True, "data": created_questions}
+
+
+@questions_router.post("/{question_id}/duplicate", response_model=AppraisalQuestionDetailResponse)
+def duplicate_question(
+    question_id: uuid.UUID,
+    payload: AppraisalQuestionDuplicateRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "218", "duplicate appraisal question")
+    org_id = _get_org_id(current_user)
+    
+    source_question = db.query(AppraisalQuestion).join(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalQuestion.uuid == question_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not source_question:
+        raise HTTPException(status_code=404, detail="Source question not found")
+        
+    target_section = db.query(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalSection.uuid == payload.target_section_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not target_section:
+        raise HTTPException(status_code=404, detail="Target section not found")
+        
+    max_order = db.query(func.max(AppraisalQuestion.question_order)).filter(
+        AppraisalQuestion.section_id == target_section.id
+    ).scalar()
+    
+    new_order = (max_order or 0) + 1
+    
+    new_question = AppraisalQuestion(
+        section_id=target_section.id,
+        question_text=source_question.question_text + " (Copy)",
+        question_type=source_question.question_type,
+        question_order=new_order,
+        is_required=source_question.is_required,
+        weight=source_question.weight,
+        use_section_rating_scale=source_question.use_section_rating_scale,
+        custom_rating_scale_id=source_question.custom_rating_scale_id,
+        choices=source_question.choices,
+        allow_multiple_selection=source_question.allow_multiple_selection,
+        competency_id=source_question.competency_id,
+        auto_populate_goals=source_question.auto_populate_goals,
+        guidance=source_question.guidance,
+        placeholder_text=source_question.placeholder_text
+    )
+    
+    db.add(new_question)
+    db.commit()
+    db.refresh(new_question)
+    
+    return {"success": True, "data": new_question}
+
+@questions_router.get("/{question_id}", response_model=AppraisalQuestionDetailResponse)
+def get_question(
+    question_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "217", "view appraisal question")
+    org_id = _get_org_id(current_user)
+    
+    question = db.query(AppraisalQuestion).join(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalQuestion.uuid == question_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+        
+    return {"success": True, "data": question}
+
+
+@questions_router.put("/{question_id}", response_model=AppraisalQuestionDetailResponse)
+def update_question(
+    question_id: uuid.UUID,
+    payload: AppraisalQuestionUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "219", "update appraisal question")
+    org_id = _get_org_id(current_user)
+    
+    question = db.query(AppraisalQuestion).join(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalQuestion.uuid == question_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+        
+    update_data = payload.model_dump(exclude_unset=True)
+    
+    if "question_order" in update_data and update_data["question_order"] != question.question_order:
+        existing_order = db.query(AppraisalQuestion).filter(
+            AppraisalQuestion.section_id == question.section_id,
+            AppraisalQuestion.question_order == update_data["question_order"],
+            AppraisalQuestion.id != question.id
+        ).first()
+        if existing_order:
+            raise HTTPException(status_code=400, detail="Another question already uses this order.")
+            
+    if "custom_rating_scale_uuid" in update_data:
+        scale_uuid = update_data.pop("custom_rating_scale_uuid")
+        if scale_uuid:
+            scale = db.query(RatingScale).filter(
+                RatingScale.uuid == scale_uuid,
+                RatingScale.organization_id == org_id
+            ).first()
+            if scale:
+                update_data["custom_rating_scale_id"] = scale.id
+        else:
+            update_data["custom_rating_scale_id"] = None
+            
+    if "competency_uuid" in update_data:
+        comp_uuid = update_data.pop("competency_uuid")
+        if comp_uuid:
+            from app.models.performance import CompetencyFramework
+            comp = db.query(CompetencyFramework).filter(
+                CompetencyFramework.uuid == comp_uuid,
+                CompetencyFramework.organization_id == org_id
+            ).first()
+            if comp:
+                update_data["competency_id"] = comp.id
+        else:
+            update_data["competency_id"] = None
+            
+    for key, value in update_data.items():
+        setattr(question, key, value)
+        
+    db.commit()
+    db.refresh(question)
+    
+    return {"success": True, "message": "Question updated successfully", "data": question}
+
+
+@questions_router.delete("/{question_id}")
+def delete_question(
+    question_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    _require_permission(db, current_user, "220", "delete appraisal question")
+    org_id = _get_org_id(current_user)
+    
+    question = db.query(AppraisalQuestion).join(AppraisalSection).join(AppraisalTemplate).filter(
+        AppraisalQuestion.uuid == question_id,
+        AppraisalTemplate.organization_id == org_id
+    ).first()
+    
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+        
+    db.delete(question)
+    db.commit()
+    
+    return {"success": True, "message": "Question deleted successfully"}
 
 
 # ============================================================

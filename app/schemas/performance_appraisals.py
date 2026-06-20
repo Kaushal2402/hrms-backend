@@ -325,6 +325,7 @@ class ManagerAppraisalResponse(BaseModel):
 
 
 class PendingManagerAppraisalItem(BaseModel):
+    record_uuid: UUID4
     employee: EmployeePerformanceSummary
     appraisal_cycle: AppraisalCycleSummary
     deadline: Optional[date] = None
@@ -354,6 +355,7 @@ class ScoreComparisonResponse(BaseModel):
     success: bool
     message: str
     data: List[ScoreComparisonSection]
+
 
 
 class ManagerOverrideScoreRequest(BaseModel):
@@ -896,12 +898,28 @@ class AppraisalQuestionCreate(BaseModel):
 class AppraisalQuestionUpdate(AppraisalQuestionCreate):
     pass
 
+class AppraisalQuestionBulkCreate(BaseModel):
+    section_id: UUID4
+    questions: List[AppraisalQuestionCreate]
+
+class AppraisalQuestionDuplicateRequest(BaseModel):
+    target_section_id: UUID4
+
 class AppraisalQuestionSchema(AppraisalQuestionCreate):
     uuid: UUID4
     custom_rating_scale: Optional[RatingScaleSummary] = None
 
     class Config:
         from_attributes = True
+
+class AppraisalQuestionListResponse(BaseModel):
+    success: bool = True
+    data: List[AppraisalQuestionSchema]
+
+class AppraisalQuestionDetailResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    data: AppraisalQuestionSchema
 
 
 class AppraisalSectionCreate(BaseModel):
@@ -918,6 +936,18 @@ class AppraisalSectionCreate(BaseModel):
 
 class AppraisalSectionUpdate(AppraisalSectionCreate):
     questions: List[AppraisalQuestionUpdate] = []
+
+class QuestionReorderItem(BaseModel):
+    question_id: UUID4
+    new_order: int
+
+class SectionWeightItem(BaseModel):
+    section_id: UUID4
+    weight: Decimal
+
+class SectionBulkWeightRequest(BaseModel):
+    template_id: UUID4
+    sections: List[SectionWeightItem]
 
 class AppraisalSectionSchema(BaseModel):
     uuid: UUID4

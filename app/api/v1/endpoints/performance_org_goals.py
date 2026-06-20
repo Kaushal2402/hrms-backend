@@ -36,7 +36,7 @@ def _require_permission(db: Session, current_user: Union[Organization, Employee]
 
 def _is_manager(db: Session, employee_id: int) -> bool:
     # Check if this employee manages anyone
-    return db.query(Employee).filter(Employee.manager_id == employee_id).first() is not None
+    return db.query(Employee).filter(Employee.reporting_manager_id == employee_id).first() is not None
 
 def _calculate_progress(current_val: Optional[Decimal], target_val: Optional[Decimal]) -> Decimal:
     if not target_val or target_val == Decimal("0.00"):

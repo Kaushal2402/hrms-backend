@@ -379,6 +379,97 @@ def launch_cycle(
 
 
 # ─────────────────────────────────────────────────────────────────────
+# POST  /{cycle_id}/generate-records
+# ─────────────────────────────────────────────────────────────────────
+
+@router.post("/{cycle_id}/generate-records")
+def generate_records(
+    cycle_id: str,
+    db: Session = Depends(deps.get_db),
+    current_user: Union[Organization, Employee] = Depends(deps.get_current_user)
+):
+    """
+    Manually trigger record generation for eligible employees in a cycle.
+    """
+    _require_permission(db, current_user, "222", "generate records")
+    org_id = _get_org_id(current_user)
+    cycle = _resolve_cycle(cycle_id, org_id, db)
+
+    # Determine eligible employees -------------------------------------------
+    emp_query = db.query(Employee).filter(
+        Employee.organization_id == org_id,
+        Employee.is_active == True
+    )
+
+    # Filter by applicable_departments if configured
+    if cycle.applicable_departments:
+        dept_uuids = []
+        for d in cycle.applicable_departments:
+            try:
+                dept_uuids.append(uuid.UUID(d) if isinstance(d, str) else d)
+            except ValueError:
+                pass
+        if dept_uuids:
+            dept_ids = [
+                row.id for row in
+                db.query(Department.id).filter(
+                    Department.uuid.in_(dept_uuids),
+                    Department.organization_id == org_id
+                ).all()
+            ]
+            emp_query = emp_query.filter(Employee.department_id.in_(dept_ids))
+
+    # Filter by applicable_employee_types if configured
+    if cycle.applicable_employee_types:
+        emp_query = emp_query.filter(
+            Employee.employment_type.in_(cycle.applicable_employee_types)
+        )
+
+    # Exclude probationary employees if not included
+    if not cycle.include_probationary and cycle.minimum_tenure_days:
+        from datetime import date, timedelta
+        cutoff = date.today() - timedelta(days=cycle.minimum_tenure_days)
+        emp_query = emp_query.filter(Employee.date_of_joining <= cutoff)
+
+    employees = emp_query.all()
+    total_eligible = len(employees)
+
+    # Create AppraisalRecord for each eligible employee ----------------------
+    created = 0
+    already_existed = 0
+    for emp in employees:
+        # Skip if a record already exists
+        existing = db.query(AppraisalRecord).filter(
+            AppraisalRecord.appraisal_cycle_id == cycle.id,
+            AppraisalRecord.employee_id == emp.id
+        ).first()
+        if existing:
+            already_existed += 1
+            continue
+
+        manager_id = getattr(emp, "reporting_manager_id", None)
+        record = AppraisalRecord(
+            organization_id=org_id,
+            appraisal_cycle_id=cycle.id,
+            employee_id=emp.id,
+            manager_id=manager_id,
+            template_id=cycle.template_id,
+            rating_scale_id=cycle.rating_scale_id,
+            status=AppraisalStatus.NOT_STARTED,
+        )
+        db.add(record)
+        created += 1
+
+    db.commit()
+
+    return {
+        "records_created": created,
+        "already_existed": already_existed,
+        "skipped_ineligible": 0  # Logic inherently skips them in the query
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
 # PATCH  /{cycle_id}/advance-phase
 # ─────────────────────────────────────────────────────────────────────
 
