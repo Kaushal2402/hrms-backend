@@ -1160,6 +1160,8 @@ def reopen_manager_appraisal(
     ma.is_submitted = False
     ma.submitted_at = None
     record.status = AppraisalStatus.MANAGER_IN_PROGRESS
+    if payload.reason:
+        record.notes = payload.reason
     
     db.commit()
     db.refresh(ma)
