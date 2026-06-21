@@ -90,6 +90,7 @@ api_router.include_router(performance_goal_alignments.router, prefix="/performan
 api_router.include_router(performance_appraisal_cycles.router, prefix="/performance/cycles", tags=["performance"])
 api_router.include_router(performance_appraisal_cycles.router, prefix="/performance/appraisal-cycles", tags=["performance"])
 api_router.include_router(performance_appraisals.router, prefix="/performance/appraisals", tags=["performance"])
+api_router.include_router(performance_appraisals.router, prefix="/performance", tags=["performance"])
 api_router.include_router(performance_appraisals.templates_router, prefix="/performance/appraisal-templates", tags=["performance"])
 api_router.include_router(performance_appraisals.sections_router, prefix="/performance/appraisal-sections", tags=["performance"])
 api_router.include_router(performance_appraisals.questions_router, prefix="/performance/appraisal-questions", tags=["performance"])
