@@ -1183,7 +1183,7 @@ def get_pending_manager_appraisals(
     
     query = db.query(AppraisalRecord).filter(
         AppraisalRecord.organization_id == org_id,
-        AppraisalRecord.status == AppraisalStatus.SELF_SUBMITTED
+        AppraisalRecord.status.in_([AppraisalStatus.SELF_SUBMITTED, AppraisalStatus.MANAGER_IN_PROGRESS])
     )
     if not isinstance(current_user, Organization):
         query = query.filter(AppraisalRecord.manager_id == current_user.id)
